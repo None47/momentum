@@ -1,26 +1,182 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   MOMENTUM — Global Styles
+   Dark, premium, JetBrains Mono everywhere
+   ============================================================ */
+
+@theme {
+  --color-bg: #060606;
+  --color-bg-card: #0d0d0d;
+  --color-bg-hover: #141414;
+  --color-border: #1a1a1a;
+  --color-border-hover: #2a2a2a;
+  --color-text-primary: #e5e5e5;
+  --color-text-secondary: #737373;
+  --color-text-muted: #525252;
+
+  --color-medical: #ef4444;
+  --color-body: #f97316;
+  --color-grind: #3b82f6;
+  --color-mind: #a855f7;
+  --color-gold: #fbbf24;
+  --color-gold-dim: #92710d;
+
+  --color-critical-hit: #ef4444;
+  --color-double-xp: #fbbf24;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base */
+html {
+  background-color: #060606;
+  color: #e5e5e5;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  background-color: #060606;
+  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: contain;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  a[href],
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #060606;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2a2a;
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+/* Streak fire glow for 7+ days */
+@keyframes streakGlow {
+  0%, 100% { text-shadow: 0 0 8px #fbbf24, 0 0 16px rgba(251, 191, 36, 0.3); }
+  50% { text-shadow: 0 0 16px #fbbf24, 0 0 32px rgba(251, 191, 36, 0.5); }
+}
+
+.streak-fire {
+  animation: streakGlow 2s ease-in-out infinite;
+  color: #fbbf24;
+}
+
+/* At-risk pulse — red border loop */
+@keyframes atRiskPulse {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.6); }
+  50% { border-color: rgba(239, 68, 68, 0.1); }
+}
+
+.at-risk-pulse {
+  animation: atRiskPulse 1.5s ease-in-out infinite;
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* AI shimmer skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.ai-shimmer {
+  background: linear-gradient(
+    90deg,
+    #0d0d0d 25%,
+    #1a1a1a 50%,
+    #0d0d0d 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Gold glow for score */
+@keyframes goldGlow {
+  0%, 100% { text-shadow: 0 0 8px rgba(251, 191, 36, 0.4); }
+  50% { text-shadow: 0 0 20px rgba(251, 191, 36, 0.7); }
+}
+
+.gold-glow {
+  animation: goldGlow 3s ease-in-out infinite;
+  color: #fbbf24;
+}
+
+/* Score count-up flash */
+@keyframes scoreFlash {
+  0% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.score-flash {
+  animation: scoreFlash 0.4s ease-out;
+}
+
+/* Day counter subtle flash */
+@keyframes dayFlash {
+  0% { color: #fbbf24; }
+  100% { color: #737373; }
+}
+
+.day-flash {
+  animation: dayFlash 1.5s ease-out;
+}
+
+/* Letter spacing animation for PERFECT DAY */
+@keyframes letterSpread {
+  0% { letter-spacing: 0; opacity: 0; }
+  100% { letter-spacing: 0.3em; opacity: 1; }
+}
+
+.perfect-day-text {
+  animation: letterSpread 1.2s ease-out forwards;
+}
+
+/* prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .streak-fire,
+  .at-risk-pulse,
+  .ai-shimmer,
+  .gold-glow,
+  .score-flash,
+  .day-flash,
+  .perfect-day-text {
+    animation: none;
+  }
 }
