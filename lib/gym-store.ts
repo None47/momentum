@@ -1,5 +1,3 @@
-import type { BodyMetricEntry } from "@/lib/health-store";
-
 export type GymSplit = "PUSH" | "PULL" | "LEGS" | "REST";
 
 export interface GymSet {
@@ -18,16 +16,31 @@ export interface GymExerciseLog {
 export interface WorkoutSession {
   id: string;
   date: string;
+  split: GymSplit;
   startTime: number;
   endTime: number | null;
-  split: GymSplit;
   exercises: GymExerciseLog[];
-  energyBefore: number;
-  energyAfter: number;
   totalVolume: number;
   prsHit: number;
   completedExercises: number;
   sessionPr: boolean;
+  energyAfter: number;
+}
+
+export interface PreviousExerciseSnapshot {
+  date: string;
+  weight: number;
+  reps: number;
+  sets: number;
+  volume: number;
+}
+
+export interface ExerciseHistoryEntry {
+  workoutId: string;
+  date: string;
+  split: GymSplit;
+  sets: GymSet[];
+  volume: number;
 }
 
 export interface ExerciseStats {
@@ -39,83 +52,65 @@ export interface ExerciseStats {
   totalVolume: number;
   sessions: number;
   firstBestWeight: number;
+  firstBestReps: number;
+  firstSessionVolume: number;
   latestBestWeight: number;
-  firstSessionVol: number;
-  latestSessionVol: number;
+  latestBestReps: number;
+  latestSessionVolume: number;
   improvementKg: number;
   improvementPct: number;
 }
 
-export interface PreviousExerciseSnapshot {
-  date: string;
-  weight: number;
-  reps: number;
-  sets: number;
-  volume: number;
-}
-
 export interface ExerciseProgress {
-  tone: "up" | "down" | "match" | "flat";
+  tone: "up" | "down" | "same";
   label: string;
   isNewPr: boolean;
-}
-
-export interface ExerciseHistoryEntry {
-  workoutId: string;
-  date: string;
-  split: GymSplit;
-  sets: GymSet[];
-  volume: number;
 }
 
 export interface GymOverview {
   totalSessions: number;
   totalVolumeKg: number;
-  totalVolumeTonnes: string;
+  totalVolumeTonnes: number;
   currentStreak: number;
-  maxStreak: number;
-  favSplit: GymSplit | "-";
-  mostImprovedExercise: {
-    name: string;
-    pct: number;
-    kg: number;
-  } | null;
+  longestStreak: number;
 }
 
 const KEYS = {
   workouts: "momentum_gym_workouts",
-  activeWorkout: "momentum_gym_active",
+  activeWorkout: "momentum_gym_active_workout",
 } as const;
+
+export const SPLIT_SCHEDULE = "Mon=PUSH · Tue=PULL · Wed=LEGS · Thu=REST · Fri=PUSH · Sat=PULL · Sun=LEGS";
 
 export const ROUTINES: Record<GymSplit, string[]> = {
   PUSH: [
-    "Flat Bench Press (Barbell)",
-    "Incline Bench Press (Dumbbell)",
-    "Overhead Press (Barbell)",
-    "Lateral Raises (Dumbbell)",
-    "Tricep Pushdown (Cable)",
-    "Skull Crushers (EZ Bar)",
+    "Flat Bench Press",
+    "Incline DB Press",
+    "Overhead Press",
+    "Lateral Raises",
+    "Tricep Pushdown",
+    "Skull Crushers",
     "Chest Dips",
   ],
   PULL: [
-    "Deadlift (Barbell)",
+    "Deadlift",
     "Pull Ups / Lat Pulldown",
     "Seated Cable Row",
-    "Single Arm Dumbbell Row",
-    "Face Pulls (Cable)",
+    "Single Arm DB Row",
+    "Face Pulls",
     "Barbell Curl",
-    "Hammer Curl (Dumbbell)",
+    "Hammer Curl",
     "Reverse Curl",
   ],
   LEGS: [
     "Barbell Squat",
     "Romanian Deadlift",
-    "Leg Press (Machine)",
-    "Leg Extension (Machine)",
-    "Leg Curl (Machine)",
+    "Leg Press",
+    "Leg Extension",
+    "Leg Curl",
     "Standing Calf Raises",
-    "Lunges (Dumbbell)",
-    "Hip Thrust (Barbell)",
+    "Lunges",
+    "Hip Thrust",
   ],
   REST: [],
 };
@@ -123,7 +118,7 @@ export const ROUTINES: Record<GymSplit, string[]> = {
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = window.localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -131,9 +126,26 @@ function read<T>(key: string, fallback: T): T {
 }
 
 function write(key: string, value: unknown) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(key, JSON.stringify(value));
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getIsoDate(date = new Date()): string {
+  return date.toISOString().split("T")[0];
+}
+
+function getDatesBetween(start: Date, end: Date): string[] {
+  const days: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    days.push(getIsoDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
   }
+  return days;
+}
+
+function getUniqueWorkoutDates(): string[] {
+  return Array.from(new Set(getWorkouts().map((workout) => workout.date))).sort();
 }
 
 function getTopSet(sets: GymSet[]): GymSet | null {
@@ -147,34 +159,28 @@ function getTopSet(sets: GymSet[]): GymSet | null {
   );
 }
 
-function getExerciseVolume(sets: GymSet[]): number {
+function roundWeight(value: number): number {
+  return Number(value.toFixed(1));
+}
+
+export function getExerciseVolume(sets: GymSet[]): number {
   return sets.reduce((sum, set) => {
     if (!set.completed) return sum;
     return sum + set.weight * set.reps;
   }, 0);
 }
 
-function getIsoDate(offsetDays = 0): string {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  return date.toISOString().split("T")[0];
-}
-
-function getWorkoutDates(): string[] {
-  return Array.from(new Set(getWorkouts().map((workout) => workout.date))).sort();
-}
-
 export function getTodaySplit(date = new Date()): GymSplit {
-  const map: Record<number, GymSplit> = {
+  const splitMap: Record<number, GymSplit> = {
+    0: "LEGS",
     1: "PUSH",
     2: "PULL",
     3: "LEGS",
     4: "REST",
     5: "PUSH",
     6: "PULL",
-    0: "LEGS",
   };
-  return map[date.getDay()];
+  return splitMap[date.getDay()];
 }
 
 export function getWorkouts(): WorkoutSession[] {
@@ -201,61 +207,150 @@ export function saveActiveWorkout(session: WorkoutSession | null) {
   write(KEYS.activeWorkout, session);
 }
 
-export function finishActiveWorkout(energyAfter: number): WorkoutSession | null {
-  const active = getActiveWorkout();
-  if (!active) return null;
+export function getLastSessionData(name: string): PreviousExerciseSnapshot | null {
+  const match = getExerciseHistory(name).at(-1);
+  if (!match) return null;
+  const topSet = getTopSet(match.sets);
+  return {
+    date: match.date,
+    weight: topSet?.weight ?? 0,
+    reps: topSet?.reps ?? 0,
+    sets: match.sets.filter((set) => set.completed).length,
+    volume: match.volume,
+  };
+}
 
-  const history = getWorkouts();
+export function getExercisePersonalBest(name: string): PreviousExerciseSnapshot | null {
+  const history = getExerciseHistory(name);
+  let best: PreviousExerciseSnapshot | null = null;
+
+  history.forEach((entry) => {
+    const topSet = getTopSet(entry.sets);
+    if (!topSet) return;
+
+    const snapshot: PreviousExerciseSnapshot = {
+      date: entry.date,
+      weight: topSet.weight,
+      reps: topSet.reps,
+      sets: entry.sets.filter((set) => set.completed).length,
+      volume: entry.volume,
+    };
+
+    if (
+      best === null ||
+      snapshot.weight > best.weight ||
+      (snapshot.weight === best.weight && snapshot.reps > best.reps)
+    ) {
+      best = snapshot;
+    }
+  });
+
+  return best;
+}
+
+export function createInitialSets(name: string): GymSet[] {
+  const previous = getLastSessionData(name);
+  const weight = previous?.weight || 20;
+  const reps = previous?.reps || 8;
+  return Array.from({ length: 3 }, () => ({
+    weight,
+    reps,
+    completed: false,
+  }));
+}
+
+export function createWorkoutSession(split: GymSplit): WorkoutSession {
+  const actualSplit = split;
+  return {
+    id: `gym_${Date.now()}`,
+    date: getIsoDate(),
+    split: actualSplit,
+    startTime: Date.now(),
+    endTime: null,
+    exercises: ROUTINES[actualSplit].map((name, index) => ({
+      id: `exercise_${Date.now()}_${index}`,
+      name,
+      sets: createInitialSets(name),
+      volume: 0,
+    })),
+    totalVolume: 0,
+    prsHit: 0,
+    completedExercises: 0,
+    sessionPr: false,
+    energyAfter: 0,
+  };
+}
+
+export function buildWorkoutSummary(session: WorkoutSession, energyAfter: number): WorkoutSession {
+  const history = getWorkouts().filter((workout) => workout.id !== session.id);
   let totalVolume = 0;
   let prsHit = 0;
   let completedExercises = 0;
 
-  const exercises = active.exercises.map((exercise) => {
+  const exercises = session.exercises.map((exercise) => {
     const volume = getExerciseVolume(exercise.sets);
     const completedSets = exercise.sets.filter((set) => set.completed);
     const topSet = getTopSet(exercise.sets);
-    const pastLogs = history
+
+    if (completedSets.length > 0) {
+      completedExercises += 1;
+    }
+
+    const pastHistory = history
       .flatMap((workout) => workout.exercises.filter((item) => item.name === exercise.name))
       .filter((item) => item.volume > 0);
 
     const bestPastWeight = Math.max(
       0,
-      ...pastLogs.flatMap((item) =>
-        item.sets.filter((set) => set.completed).map((set) => set.weight),
+      ...pastHistory.flatMap((entry) =>
+        entry.sets.filter((set) => set.completed).map((set) => set.weight),
       ),
     );
-    const bestPastVolume = Math.max(0, ...pastLogs.map((item) => item.volume));
+    const bestPastRepsAtTopWeight = Math.max(
+      0,
+      ...pastHistory.flatMap((entry) =>
+        entry.sets
+          .filter((set) => set.completed && set.weight === bestPastWeight)
+          .map((set) => set.reps),
+      ),
+    );
+    const bestPastVolume = Math.max(0, ...pastHistory.map((entry) => entry.volume));
 
     const hitPr =
-      (topSet !== null && topSet.weight > bestPastWeight) ||
-      (volume > 0 && volume > bestPastVolume);
+      topSet !== null &&
+      (topSet.weight > bestPastWeight ||
+        (topSet.weight === bestPastWeight && topSet.reps > bestPastRepsAtTopWeight) ||
+        volume > bestPastVolume);
 
-    if (completedSets.length > 0) {
-      completedExercises += 1;
-    }
-    if (hitPr) {
+    if (hitPr && completedSets.length > 0) {
       prsHit += 1;
     }
 
     totalVolume += volume;
-    return { ...exercise, volume };
+
+    return {
+      ...exercise,
+      volume,
+    };
   });
 
-  const highestPastSessionVolume = Math.max(0, ...history.map((item) => item.totalVolume));
-  const finished: WorkoutSession = {
-    ...active,
+  const highestPastSessionVolume = Math.max(0, ...history.map((workout) => workout.totalVolume));
+
+  return {
+    ...session,
     exercises,
     endTime: Date.now(),
-    energyAfter,
     totalVolume,
     prsHit,
     completedExercises,
-    sessionPr: totalVolume > 0 && totalVolume > highestPastSessionVolume,
+    sessionPr: totalVolume > highestPastSessionVolume,
+    energyAfter,
   };
+}
 
-  saveWorkout(finished);
+export function finalizeWorkout(session: WorkoutSession) {
+  saveWorkout(session);
   saveActiveWorkout(null);
-  return finished;
 }
 
 export function getExerciseHistory(name: string): ExerciseHistoryEntry[] {
@@ -283,20 +378,26 @@ export function getExerciseStats(name: string): ExerciseStats {
   let totalReps = 0;
   let totalVolume = 0;
   let firstBestWeight = 0;
+  let firstBestReps = 0;
+  let firstSessionVolume = 0;
   let latestBestWeight = 0;
-  let firstSessionVol = 0;
-  let latestSessionVol = 0;
+  let latestBestReps = 0;
+  let latestSessionVolume = 0;
 
   history.forEach((entry, index) => {
     const topSet = getTopSet(entry.sets);
     const topWeight = topSet?.weight ?? 0;
     const topReps = topSet?.reps ?? 0;
+
     if (index === 0) {
       firstBestWeight = topWeight;
-      firstSessionVol = entry.volume;
+      firstBestReps = topReps;
+      firstSessionVolume = entry.volume;
     }
+
     latestBestWeight = topWeight;
-    latestSessionVol = entry.volume;
+    latestBestReps = topReps;
+    latestSessionVolume = entry.volume;
     bestVolume = Math.max(bestVolume, entry.volume);
     totalVolume += entry.volume;
 
@@ -310,7 +411,7 @@ export function getExerciseStats(name: string): ExerciseStats {
     });
   });
 
-  const improvementKg = latestBestWeight - firstBestWeight;
+  const improvementKg = roundWeight(latestBestWeight - firstBestWeight);
   const improvementPct = firstBestWeight > 0 ? (improvementKg / firstBestWeight) * 100 : 0;
 
   return {
@@ -322,9 +423,11 @@ export function getExerciseStats(name: string): ExerciseStats {
     totalVolume,
     sessions: history.length,
     firstBestWeight,
+    firstBestReps,
+    firstSessionVolume,
     latestBestWeight,
-    firstSessionVol,
-    latestSessionVol,
+    latestBestReps,
+    latestSessionVolume,
     improvementKg,
     improvementPct,
   };
@@ -334,49 +437,9 @@ export function getAllExerciseStats(): ExerciseStats[] {
   const names = new Set(
     getWorkouts().flatMap((workout) => workout.exercises.map((exercise) => exercise.name)),
   );
-  return Array.from(names).map((name) => getExerciseStats(name));
-}
-
-export function getLastSessionData(name: string): PreviousExerciseSnapshot | null {
-  const match = getExerciseHistory(name).at(-1);
-  if (!match) return null;
-  const topSet = getTopSet(match.sets);
-  return {
-    date: match.date,
-    weight: topSet?.weight ?? 0,
-    reps: topSet?.reps ?? 0,
-    sets: match.sets.filter((set) => set.completed).length,
-    volume: match.volume,
-  };
-}
-
-export function getExercisePersonalBest(name: string): PreviousExerciseSnapshot | null {
-  const history = getExerciseHistory(name);
-  if (history.length === 0) return null;
-
-  let best: PreviousExerciseSnapshot | null = null;
-  history.forEach((entry) => {
-    const topSet = getTopSet(entry.sets);
-    if (!topSet) return;
-
-    const snapshot: PreviousExerciseSnapshot = {
-      date: entry.date,
-      weight: topSet.weight,
-      reps: topSet.reps,
-      sets: entry.sets.filter((set) => set.completed).length,
-      volume: entry.volume,
-    };
-
-    if (
-      best === null ||
-      snapshot.weight > best.weight ||
-      (snapshot.weight === best.weight && snapshot.reps > best.reps)
-    ) {
-      best = snapshot;
-    }
-  });
-
-  return best;
+  return Array.from(names)
+    .map((name) => getExerciseStats(name))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function getExerciseProgress(name: string, currentSets: GymSet[]): ExerciseProgress | null {
@@ -390,123 +453,94 @@ export function getExerciseProgress(name: string, currentSets: GymSet[]): Exerci
     (currentTopSet.weight > bestEver.weight ||
       (currentTopSet.weight === bestEver.weight && currentTopSet.reps > bestEver.reps));
 
-  if (currentTopSet.weight > lastSession.weight) {
+  if (isNewPr) {
     return {
       tone: "up",
-      label: `↑ +${currentTopSet.weight - lastSession.weight}kg from last session`,
-      isNewPr,
+      label: "NEW PR",
+      isNewPr: true,
     };
   }
 
-  if (currentTopSet.weight === lastSession.weight && currentTopSet.reps > lastSession.reps) {
+  if (currentTopSet.weight > lastSession.weight) {
     return {
       tone: "up",
-      label: `→ Same weight, +${currentTopSet.reps - lastSession.reps} reps`,
-      isNewPr,
+      label: `↑ +${roundWeight(currentTopSet.weight - lastSession.weight)}kg`,
+      isNewPr: false,
     };
   }
 
   if (currentTopSet.weight < lastSession.weight) {
     return {
       tone: "down",
-      label: `↓ -${lastSession.weight - currentTopSet.weight}kg from last session`,
-      isNewPr,
-    };
-  }
-
-  if (currentTopSet.reps === lastSession.reps) {
-    return {
-      tone: "match",
-      label: "= Matched last session",
-      isNewPr,
+      label: `↓ -${roundWeight(lastSession.weight - currentTopSet.weight)}kg`,
+      isNewPr: false,
     };
   }
 
   return {
-    tone: "flat",
-    label: `→ ${currentTopSet.reps - lastSession.reps} rep change at same weight`,
-    isNewPr,
+    tone: "same",
+    label: currentTopSet.reps === lastSession.reps ? "= Same" : `= ${currentTopSet.reps - lastSession.reps > 0 ? "+" : ""}${currentTopSet.reps - lastSession.reps} reps`,
+    isNewPr: false,
   };
 }
 
 export function getGymThisWeek(): number {
   const today = new Date();
+  const monday = new Date(today);
   const day = today.getDay();
   const diffToMonday = day === 0 ? 6 : day - 1;
-  const monday = new Date(today);
-  monday.setHours(0, 0, 0, 0);
   monday.setDate(today.getDate() - diffToMonday);
-  const mondayIso = monday.toISOString().split("T")[0];
+  monday.setHours(0, 0, 0, 0);
+  const mondayIso = getIsoDate(monday);
   return getWorkouts().filter((session) => session.date >= mondayIso).length;
 }
 
 export function getGymOverview(): GymOverview {
   const workouts = getWorkouts();
-  const totalSessions = workouts.length;
+  const dates = getUniqueWorkoutDates();
   const totalVolumeKg = workouts.reduce((sum, workout) => sum + workout.totalVolume, 0);
 
-  const dates = getWorkoutDates();
-  let maxStreak = 0;
-  let tempStreak = 0;
+  let longestStreak = 0;
+  let currentRun = 0;
+  let previousDate: string | null = null;
 
-  dates.forEach((date, index) => {
-    if (index === 0) {
-      tempStreak = 1;
-      maxStreak = 1;
-      return;
+  dates.forEach((date) => {
+    if (!previousDate) {
+      currentRun = 1;
+    } else {
+      const previous = new Date(previousDate);
+      const current = new Date(date);
+      const diffDays = Math.round((current.getTime() - previous.getTime()) / 86400000);
+      currentRun = diffDays === 1 ? currentRun + 1 : 1;
     }
-
-    const previous = new Date(dates[index - 1]).getTime();
-    const current = new Date(date).getTime();
-    const diffDays = Math.round((current - previous) / 86400000);
-    tempStreak = diffDays === 1 ? tempStreak + 1 : 1;
-    maxStreak = Math.max(maxStreak, tempStreak);
+    longestStreak = Math.max(longestStreak, currentRun);
+    previousDate = date;
   });
 
   let currentStreak = 0;
-  let cursor = new Date();
-  const dateSet = new Set(dates);
-  const hasToday = dateSet.has(getIsoDate(0));
-  const hasYesterday = dateSet.has(getIsoDate(-1));
+  if (dates.length > 0) {
+    const latestLoggedDate = new Date(dates[dates.length - 1]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const latestDiff = Math.round((today.getTime() - latestLoggedDate.getTime()) / 86400000);
 
-  if (hasToday || hasYesterday) {
-    if (!hasToday) cursor.setDate(cursor.getDate() - 1);
-    while (dateSet.has(cursor.toISOString().split("T")[0])) {
-      currentStreak += 1;
-      cursor.setDate(cursor.getDate() - 1);
+    if (latestDiff <= 1) {
+      const dateSet = new Set(dates);
+      const startCursor = new Date(latestLoggedDate);
+      const historyWindow = getDatesBetween(new Date(dates[0]), startCursor).reverse();
+      for (const date of historyWindow) {
+        if (!dateSet.has(date)) break;
+        currentStreak += 1;
+      }
     }
   }
 
-  const splitCounts = workouts.reduce<Record<GymSplit, number>>(
-    (acc, workout) => {
-      acc[workout.split] += 1;
-      return acc;
-    },
-    { PUSH: 0, PULL: 0, LEGS: 0, REST: 0 },
-  );
-
-  const favSplit =
-    (Object.entries(splitCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as GymSplit | undefined) ?? "-";
-
-  const mostImprovedExercise =
-    getAllExerciseStats()
-      .filter((stat) => stat.sessions >= 2 && stat.firstBestWeight > 0)
-      .sort((a, b) => b.improvementPct - a.improvementPct)[0] ?? null;
-
   return {
-    totalSessions,
+    totalSessions: workouts.length,
     totalVolumeKg,
-    totalVolumeTonnes: (totalVolumeKg / 1000).toFixed(1),
+    totalVolumeTonnes: totalVolumeKg / 1000,
     currentStreak,
-    maxStreak,
-    favSplit,
-    mostImprovedExercise: mostImprovedExercise
-      ? {
-          name: mostImprovedExercise.name,
-          pct: mostImprovedExercise.improvementPct,
-          kg: mostImprovedExercise.improvementKg,
-        }
-      : null,
+    longestStreak,
   };
 }
 
@@ -514,63 +548,62 @@ export function getRecentSessions(limit = 4): WorkoutSession[] {
   return getWorkouts().slice(0, limit);
 }
 
-export function getWeightCorrelationInsight(metrics: BodyMetricEntry[]): string {
-  if (metrics.length < 2) {
-    return "Log a few weigh-ins to see how gym frequency affects weight loss.";
+export function getSessionDurationMs(session: WorkoutSession): number {
+  const endTime = session.endTime ?? Date.now();
+  return Math.max(0, endTime - session.startTime);
+}
+
+export function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function getCoachFallback(sessions: WorkoutSession[]): string[] {
+  const latest = sessions[0];
+  const previous = sessions[1];
+
+  if (!latest) {
+    return [
+      "You have no saved sessions yet, so there is no trend to coach.",
+      "Nothing is stalling because there is no baseline yet.",
+      "Start your first workout and log every working set.",
+    ];
   }
 
-  const weeklySessions = getWorkouts().reduce<Record<string, number>>((acc, workout) => {
-    const date = new Date(workout.date);
-    const monday = new Date(date);
-    const diffToMonday = date.getDay() === 0 ? 6 : date.getDay() - 1;
-    monday.setDate(date.getDate() - diffToMonday);
-    const key = monday.toISOString().split("T")[0];
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+  const biggestLift = latest.exercises
+    .map((exercise) => ({
+      name: exercise.name,
+      topSet: getTopSet(exercise.sets),
+    }))
+    .filter((entry) => entry.topSet)
+    .sort((a, b) => {
+      if ((b.topSet?.weight ?? 0) !== (a.topSet?.weight ?? 0)) {
+        return (b.topSet?.weight ?? 0) - (a.topSet?.weight ?? 0);
+      }
+      return (b.topSet?.reps ?? 0) - (a.topSet?.reps ?? 0);
+    })[0];
 
-  const weighInsByWeek = metrics.reduce<Record<string, BodyMetricEntry[]>>((acc, metric) => {
-    const date = new Date(metric.date);
-    const monday = new Date(date);
-    const diffToMonday = date.getDay() === 0 ? 6 : date.getDay() - 1;
-    monday.setDate(date.getDate() - diffToMonday);
-    const key = monday.toISOString().split("T")[0];
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(metric);
-    acc[key].sort((a, b) => a.date.localeCompare(b.date));
-    return acc;
-  }, {});
+  const improving =
+    latest.prsHit > 0
+      ? `Your top-end strength is moving, with ${latest.prsHit} PR${latest.prsHit > 1 ? "s" : ""} in the last block.`
+      : biggestLift
+        ? `${biggestLift.name} is setting the pace, and your strongest set is holding steady.`
+        : "Your consistency is improving because you are finishing logged work instead of guessing.";
 
-  let fiveDayWeeks = 0;
-  let fiveDayLoss = 0;
-  let lowerWeeks = 0;
-  let lowerLoss = 0;
+  const stalling =
+    previous && latest.totalVolume < previous.totalVolume
+      ? `Total volume dipped by ${(previous.totalVolume - latest.totalVolume).toLocaleString()}kg versus the prior session, so workload is the main stall point.`
+      : previous && latest.completedExercises < previous.completedExercises
+        ? "Exercise completion fell from the last session, so session density is stalling."
+        : "No major stall is obvious yet, but you need a larger run of sessions to identify one clean bottleneck.";
 
-  Object.entries(weighInsByWeek).forEach(([week, weighIns]) => {
-    if (weighIns.length < 2) return;
-    const delta = weighIns[0].weight - weighIns[weighIns.length - 1].weight;
-    if ((weeklySessions[week] || 0) >= 5) {
-      fiveDayWeeks += 1;
-      fiveDayLoss += delta;
-    } else {
-      lowerWeeks += 1;
-      lowerLoss += delta;
-    }
-  });
+  const fix =
+    latest.exercises.length > 0
+      ? `Next session, lock your first compound lift in early and beat your previous top set by 1 rep or 2.5kg.`
+      : "Next session, add your planned exercises before you start so the workout has structure.";
 
-  if (fiveDayWeeks === 0) {
-    return "Hit one full 5-session week to unlock a clean weight-loss correlation.";
-  }
-
-  const fiveDayAvg = fiveDayLoss / fiveDayWeeks;
-  if (lowerWeeks === 0) {
-    return `Your 5-session weeks are averaging ${fiveDayAvg.toFixed(1)}kg of weight change.`;
-  }
-
-  const lowerAvg = lowerLoss / lowerWeeks;
-  if (fiveDayAvg > lowerAvg) {
-    return `Your weight drops faster on weeks with 5 gym sessions: ${fiveDayAvg.toFixed(1)}kg vs ${lowerAvg.toFixed(1)}kg.`;
-  }
-
-  return `Your recent lower-frequency weeks are dropping ${lowerAvg.toFixed(1)}kg vs ${fiveDayAvg.toFixed(1)}kg on 5-session weeks.`;
+  return [improving, stalling, fix];
 }

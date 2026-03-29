@@ -196,17 +196,4 @@ export const HABITS: HardcodedHabit[] = [
     sort_order: 13,
     notes: "Track the streak — goal is deletion",
   },
-  {
-    id: "mind-journal",
-    label: "Journal entry (2 lines)",
-    category: "MIND",
-    icon: "📝",
-    xp_value: 40,
-    scheduled_time: "9:30 PM",
-    is_critical: false,
-    location_required: "ANYWHERE",
-    frequency: "daily",
-    sort_order: 14,
-    notes: null,
-  },
 ];

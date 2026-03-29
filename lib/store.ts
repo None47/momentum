@@ -11,7 +11,6 @@ const KEYS = {
   completions: "momentum_completions",  // Record<date, habitId[]>
   streaks: "momentum_streaks",          // Record<habitId, { current, longest, lastDate }>
   score: "momentum_score",              // number
-  journal: "momentum_journal",          // Record<date, { raw, expanded, mood }>
   leetcodeCount: "momentum_lc_count",   // number
   graceDaysUsed: "momentum_grace",      // number
 } as const;
@@ -21,12 +20,6 @@ export interface StoredStreak {
   current: number;
   longest: number;
   lastDate: string | null;
-}
-
-export interface StoredJournal {
-  raw: string;
-  expanded: string | null;
-  mood: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -143,22 +136,6 @@ export function addScore(xp: number): number {
   const newScore = current + xp;
   write(KEYS.score, newScore);
   return newScore;
-}
-
-// ── Journal ───────────────────────────────────────────────────
-export function getJournalEntry(date: string): StoredJournal | null {
-  const all = read<Record<string, StoredJournal>>(KEYS.journal, {});
-  return all[date] || null;
-}
-
-export function saveJournalEntry(date: string, entry: StoredJournal): void {
-  const all = read<Record<string, StoredJournal>>(KEYS.journal, {});
-  all[date] = entry;
-  write(KEYS.journal, all);
-}
-
-export function getAllJournalEntries(): Record<string, StoredJournal> {
-  return read<Record<string, StoredJournal>>(KEYS.journal, {});
 }
 
 // ── LeetCode ──────────────────────────────────────────────────

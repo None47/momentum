@@ -1,12 +1,11 @@
-const CACHE_NAME = "momentum-v1";
+const CACHE_NAME = "momentum-v2";
 const CORE_ROUTES = [
   "/",
   "/today",
   "/chain",
-  "/stats",
   "/roadmap",
-  "/journal",
-  "/health",
+  "/gym",
+  "/stats",
   "/report",
   "/manifest.webmanifest",
   "/icon?size=192",
