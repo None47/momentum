@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ROADMAP_TOPICS, PHASE_META, type RoadmapTopic, type TopicStatus, type PhaseNumber, type LCProblem, type Resource } from "@/lib/roadmap-data";
-import { getTopicStatus, setTopicStatus, getAllTopicStatuses, getSubtopicsDone, toggleSubtopic, getLCDone, toggleLC, getTopicNotes, setTopicNotes, getLCCounter, incrementLC, decrementLC, getTotalLC, type LCCounter } from "@/lib/roadmap-store";
+import { setTopicStatus, getAllTopicStatuses, getSubtopicsDone, toggleSubtopic, getLCDone, toggleLC, getTopicNotes, setTopicNotes, getLCCounter, incrementLC, decrementLC, type LCCounter } from "@/lib/roadmap-store";
 import { getDaysToPlacement } from "@/lib/constants";
 import Header from "@/components/layout/Header";
 import BottomNav from "@/components/layout/BottomNav";
@@ -18,34 +18,37 @@ const DIFF_COLORS: Record<string, string> = { Easy: "#10b981", Medium: "#fbbf24"
 const RES_ICONS: Record<string, string> = { youtube: "▶", website: "🌐", book: "📖", course: "🎓" };
 
 export default function RoadmapPage() {
-  const [mounted, setMounted] = useState(false);
-  const [score, setScoreVal] = useState(0);
+  const score = useSyncExternalStore(
+    () => () => {},
+    () => getScore(),
+    () => 0,
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterMode>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [statuses, setStatuses] = useState<Record<string, TopicStatus>>({});
-  const [subtopics, setSubtopics] = useState<Record<string, boolean[]>>({});
-  const [lcChecks, setLcChecks] = useState<Record<string, boolean[]>>({});
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [lcCounter, setLcCounter] = useState<LCCounter>({ easy: 0, medium: 0, hard: 0 });
-
-  useEffect(() => {
-    setMounted(true);
-    setScoreVal(getScore());
-    setStatuses(getAllTopicStatuses());
-    setLcCounter(getLCCounter());
+  const [statuses, setStatuses] = useState<Record<string, TopicStatus>>(() => getAllTopicStatuses());
+  const [subtopics, setSubtopics] = useState<Record<string, boolean[]>>(() => {
     const s: Record<string, boolean[]> = {};
-    const l: Record<string, boolean[]> = {};
-    const n: Record<string, string> = {};
     ROADMAP_TOPICS.forEach((t) => {
       s[t.id] = getSubtopicsDone(t.id, t.subtopics.length);
+    });
+    return s;
+  });
+  const [lcChecks, setLcChecks] = useState<Record<string, boolean[]>>(() => {
+    const l: Record<string, boolean[]> = {};
+    ROADMAP_TOPICS.forEach((t) => {
       l[t.id] = getLCDone(t.id, t.leetcode.length);
+    });
+    return l;
+  });
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    const n: Record<string, string> = {};
+    ROADMAP_TOPICS.forEach((t) => {
       n[t.id] = getTopicNotes(t.id);
     });
-    setSubtopics(s);
-    setLcChecks(l);
-    setNotes(n);
-  }, []);
+    return n;
+  });
+  const [lcCounter, setLcCounter] = useState<LCCounter>(() => getLCCounter());
 
   const handleStatusCycle = useCallback((topicId: string) => {
     const current = statuses[topicId] || "NOT_STARTED";
@@ -119,8 +122,6 @@ export default function RoadmapPage() {
   const totalTopics = ROADMAP_TOPICS.length;
   const totalLC = lcCounter.easy + lcCounter.medium + lcCounter.hard;
   const totalHours = ROADMAP_TOPICS.reduce((a, t) => a + t.estimatedHours, 0);
-
-  if (!mounted) return <div className="min-h-screen flex items-center justify-center"><span className="text-[11px] text-[#525252] tracking-widest">MOMENTUM</span></div>;
 
   return (
     <div className="min-h-screen pb-36">

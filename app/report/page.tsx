@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { getDayNumber } from "@/lib/constants";
 import { getScore } from "@/lib/store";
 import Header from "@/components/layout/Header";
@@ -8,22 +8,14 @@ import BottomNav from "@/components/layout/BottomNav";
 import PhaseIndicator from "@/components/layout/PhaseIndicator";
 
 export default function ReportPage() {
-  const [mounted, setMounted] = useState(false);
-  const [score, setScore] = useState(0);
-
-  useEffect(() => {
-    setMounted(true);
-    setScore(getScore());
-  }, []);
+  const score = useSyncExternalStore(
+    () => () => {},
+    () => getScore(),
+    () => 0,
+  );
 
   const weekNumber = Math.ceil(getDayNumber() / 7);
   const isSunday = new Date().getDay() === 0;
-
-  if (!mounted) {
-    return <div className="min-h-screen flex items-center justify-center">
-      <span className="text-[11px] text-[#525252] tracking-widest">MOMENTUM</span>
-    </div>;
-  }
 
   return (
     <div className="min-h-screen pb-20">

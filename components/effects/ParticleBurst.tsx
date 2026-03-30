@@ -7,6 +7,7 @@ import { CATEGORY_COLORS } from "@/lib/types";
 interface ParticleBurstProps {
   trigger: boolean;
   category: HabitCategory;
+  colorOverride?: string;
   x?: number;
   y?: number;
 }
@@ -21,7 +22,13 @@ interface Particle {
   color: string;
 }
 
-export default function ParticleBurst({ trigger, category, x = 0, y = 0 }: ParticleBurstProps) {
+export default function ParticleBurst({
+  trigger,
+  category,
+  colorOverride,
+  x = 0,
+  y = 0,
+}: ParticleBurstProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
 
@@ -35,7 +42,7 @@ export default function ParticleBurst({ trigger, category, x = 0, y = 0 }: Parti
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const color = CATEGORY_COLORS[category];
+    const color = colorOverride ?? CATEGORY_COLORS[category];
     const particles: Particle[] = [];
 
     // Create 24 particles in radial pattern
@@ -83,7 +90,7 @@ export default function ParticleBurst({ trigger, category, x = 0, y = 0 }: Parti
     }
 
     animate();
-  }, [category, x, y]);
+  }, [category, colorOverride, x, y]);
 
   useEffect(() => {
     if (trigger) {

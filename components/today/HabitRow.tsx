@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import type { HabitCategory } from "@/lib/types";
 import { CATEGORY_COLORS } from "@/lib/types";
 import type { HardcodedHabit } from "@/lib/habits";
 import ChainCalendar from "@/components/chain/ChainCalendar";

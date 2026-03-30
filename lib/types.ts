@@ -75,16 +75,6 @@ export interface LeetCodeLog {
   created_at: string;
 }
 
-export interface JournalEntry {
-  id: string;
-  user_id: string;
-  date: string;
-  raw_text: string;
-  ai_expanded_text: string | null;
-  mood_score: number;
-  created_at: string;
-}
-
 export interface WeeklyReport {
   id: string;
   user_id: string;

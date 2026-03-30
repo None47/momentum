@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getDayNumber, getDaysToPlacement } from "@/lib/constants";
-import { getScore, getLeetCodeCount, getHabits, getStreak, getCompletionsForDate } from "@/lib/store";
+import { useSyncExternalStore } from "react";
+import { getCurrentPhase, getDayNumber, getDaysToPlacement, getPhaseProgress } from "@/lib/constants";
+import { getScore, getLeetCodeCount, getHabits, getCompletionsForDate } from "@/lib/store";
+import { getLibraryInsight } from "@/lib/today-store";
 import { CATEGORY_COLORS, type HabitCategory } from "@/lib/types";
 import Header from "@/components/layout/Header";
 import BottomNav from "@/components/layout/BottomNav";
-import PhaseIndicator from "@/components/layout/PhaseIndicator";
 
 const MILESTONES = [
   { label: "First internship referral sent", target: "Jun 2026", achieved: false },
@@ -22,21 +22,19 @@ const MILESTONES = [
 ];
 
 export default function StatsPage() {
-  const [mounted, setMounted] = useState(false);
-  const [score, setScore] = useState(0);
-  const [lcCount, setLcCount] = useState(0);
-
-  useEffect(() => {
-    setMounted(true);
-    setScore(getScore());
-    setLcCount(getLeetCodeCount());
-  }, []);
-
-  if (!mounted) {
-    return <div className="min-h-screen flex items-center justify-center">
-      <span className="text-[11px] text-[#525252] tracking-widest">MOMENTUM</span>
-    </div>;
-  }
+  const score = useSyncExternalStore(
+    () => () => {},
+    () => getScore(),
+    () => 0,
+  );
+  const lcCount = useSyncExternalStore(
+    () => () => {},
+    () => getLeetCodeCount(),
+    () => 0,
+  );
+  const phase = getCurrentPhase();
+  const phaseProgress = getPhaseProgress();
+  const libraryInsight = getLibraryInsight(30);
 
   // Identity rings (30-day completion rates by category)
   const habits = getHabits();
@@ -66,7 +64,6 @@ export default function StatsPage() {
   return (
     <div className="min-h-screen pb-20">
       <Header score={score} />
-      <PhaseIndicator />
       <main className="max-w-lg mx-auto px-4 pt-4">
         <h1 className="text-sm tracking-[0.3em] text-[#e5e5e5] font-bold mb-1">THE SCOREBOARD</h1>
         <p className="text-[10px] text-[#525252] mb-6">Numbers don&apos;t lie.</p>
@@ -79,6 +76,26 @@ export default function StatsPage() {
           <div className="border border-[#1a1a1a] bg-[#0d0d0d] rounded-sm p-3 text-center">
             <span className="text-2xl font-bold text-[#fbbf24] tabular-nums">{getDaysToPlacement()}</span>
             <p className="text-[9px] text-[#525252] mt-1">DAYS TO ₹60L</p>
+          </div>
+        </div>
+
+        <div className="border border-[#1a1a1a] bg-[#0d0d0d] rounded-sm p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] tracking-[0.2em] text-[#3b82f6]/60 uppercase">
+              Phase {phase.number}
+            </span>
+            <span className="text-[10px] text-[#525252]">
+              Day {phaseProgress.daysIn}/{phaseProgress.daysTotal}
+            </span>
+          </div>
+          <p className="mt-2 text-[14px] font-bold tracking-[0.14em] text-[#e5e5e5]">
+            {phase.label}
+          </p>
+          <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-[#1a1a1a]">
+            <div
+              className="h-full bg-gradient-to-r from-[#3b82f6] to-[#a855f7]"
+              style={{ width: `${phaseProgress.pct}%` }}
+            />
           </div>
         </div>
 
@@ -148,6 +165,19 @@ export default function StatsPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="border border-[#1a1a1a] bg-[#0d0d0d] rounded-sm p-4">
+          <span className="text-[9px] tracking-[0.2em] text-[#525252] uppercase">Library Pattern (30d)</span>
+          {libraryInsight.skipped > 0 && libraryInsight.topReason ? (
+            <p className="mt-3 text-[12px] leading-6 text-[#e5e5e5]">
+              You skipped library {libraryInsight.skipped} times — {libraryInsight.topReason[1]} were {libraryInsight.topReason[0].toLowerCase()}.
+            </p>
+          ) : (
+            <p className="mt-3 text-[12px] leading-6 text-[#737373]">
+              No missed-library pattern logged yet.
+            </p>
+          )}
         </div>
       </main>
       <BottomNav />

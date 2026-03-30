@@ -2,14 +2,27 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 
 const tabs = [
-  { href: "/today", label: "TODAY", icon: "☐" },
-  { href: "/chain", label: "CHAIN", icon: "⛓" },
-  { href: "/roadmap", label: "ROADMAP", icon: "🗺" },
-  { href: "/gym", label: "GYM", icon: "🏋" },
-  { href: "/stats", label: "STATS", icon: "◈" },
+  { href: "/today", label: "TODAY", icon: <span className="text-[14px]">□</span> },
+  { href: "/chain", label: "CHAIN", icon: <ChainIcon /> },
+  { href: "/roadmap", label: "ROADMAP", icon: <span className="text-[13px]">▤</span> },
+  { href: "/gym", label: "GYM", icon: <span className="text-[14px]">◆</span> },
+  { href: "/stats", label: "STATS", icon: <span className="text-[13px]">▲</span> },
 ];
+
+function ChainIcon() {
+  return (
+    <svg viewBox="0 0 32 12" className="h-3.5 w-8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <circle cx="5" cy="6" r="2.5" />
+      <circle cx="16" cy="6" r="2.5" />
+      <circle cx="27" cy="6" r="2.5" />
+      <path d="M7.5 6h6" />
+      <path d="M18.5 6h6" />
+    </svg>
+  );
+}
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -29,11 +42,11 @@ export default function BottomNav() {
               className={`flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-1 py-1 transition-colors duration-200 ${
                 isActive
                   ? "text-[#e5e5e5]"
-                  : "text-[#525252] hover:text-[#737373]"
+                  : "text-white/30 hover:text-white/50"
               }`}
             >
-              <span className="text-base">{tab.icon}</span>
-              <span className="text-[8px] tracking-[0.12em] font-medium">
+              <NavIcon>{tab.icon}</NavIcon>
+              <span className="text-[10px] tracking-[0.12em] font-medium">
                 {tab.label}
               </span>
             </Link>
@@ -42,4 +55,8 @@ export default function BottomNav() {
       </div>
     </nav>
   );
+}
+
+function NavIcon({ children }: { children: ReactNode }) {
+  return <span className="flex h-4 items-center justify-center">{children}</span>;
 }

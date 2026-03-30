@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { getHabits, getStreak, getHabitCompletionDates, getScore } from "@/lib/store";
 import { CATEGORY_COLORS, type HabitCategory } from "@/lib/types";
 import Header from "@/components/layout/Header";
@@ -9,13 +9,11 @@ import PhaseIndicator from "@/components/layout/PhaseIndicator";
 import ChainCalendar from "@/components/chain/ChainCalendar";
 
 export default function ChainPage() {
-  const [mounted, setMounted] = useState(false);
-  const [score, setScore] = useState(0);
-
-  useEffect(() => {
-    setMounted(true);
-    setScore(getScore());
-  }, []);
+  const score = useSyncExternalStore(
+    () => () => {},
+    () => getScore(),
+    () => 0,
+  );
 
   const habits = getHabits();
   const categoryOrder: HabitCategory[] = ["MEDICAL", "BODY", "GRIND", "MIND"];
@@ -28,12 +26,6 @@ export default function ChainPage() {
     .filter((h) => h.is_critical)
     .map((h) => getStreak(h.id).current);
   const medStreak = medStreaks.length > 0 ? Math.min(...medStreaks) : 0;
-
-  if (!mounted) {
-    return <div className="min-h-screen flex items-center justify-center">
-      <span className="text-[11px] text-[#525252] tracking-widest">MOMENTUM</span>
-    </div>;
-  }
 
   return (
     <div className="min-h-screen pb-20">

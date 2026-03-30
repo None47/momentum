@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
 
 interface XPToastProps {
   xp: number;
@@ -11,19 +10,9 @@ interface XPToastProps {
 }
 
 export default function XPToast({ xp, bonusLabel, color, show }: XPToastProps) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (show) {
-      setVisible(true);
-      const timer = setTimeout(() => setVisible(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [show]);
-
   return (
     <AnimatePresence>
-      {visible && (
+      {show && (
         <motion.div
           className="fixed top-20 left-1/2 z-[90] flex flex-col items-center pointer-events-none"
           initial={{ opacity: 0, y: 0, x: "-50%" }}
