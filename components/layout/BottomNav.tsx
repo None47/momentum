@@ -7,8 +7,6 @@ import type { ReactNode } from "react";
 const tabs = [
   { href: "/today", label: "TODAY", icon: <span className="text-[14px]">□</span> },
   { href: "/chain", label: "CHAIN", icon: <ChainIcon /> },
-  { href: "/roadmap", label: "ROADMAP", icon: <span className="text-[13px]">▤</span> },
-  { href: "/gym", label: "GYM", icon: <span className="text-[14px]">◆</span> },
   { href: "/stats", label: "STATS", icon: <span className="text-[13px]">▲</span> },
 ];
 
@@ -32,7 +30,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1a1a1a] bg-[#060606]/95 backdrop-blur-sm"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="max-w-lg mx-auto grid grid-cols-5 items-center py-2">
+      <div className="max-w-lg mx-auto grid grid-cols-3 items-center py-2">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
           return (

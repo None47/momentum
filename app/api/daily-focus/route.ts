@@ -1,8 +1,24 @@
 const FALLBACK_TASK =
-  "Solve Two Sum (#1) on LeetCode. Watch the NeetCode explanation first for 8 minutes, then solve it yourself. Total time: 45 minutes.";
+  "Solve Two Sum on LeetCode in 45 minutes. Watch the NeetCode explanation for 8 minutes, then solve it yourself. This matters now because you need one repeatable pattern today.";
 
-export async function POST() {
+interface TaskRequest {
+  dayNumber?: number;
+  phase?: string;
+  lcCount?: number;
+  focusArea?: string;
+  previousTask?: string | null;
+  regenerate?: boolean;
+}
+
+export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  let payload: TaskRequest = {};
+
+  try {
+    payload = (await request.json()) as TaskRequest;
+  } catch {
+    payload = {};
+  }
 
   if (!apiKey) {
     return Response.json({ task: FALLBACK_TASK });
@@ -18,13 +34,28 @@ export async function POST() {
       },
       body: JSON.stringify({
         model: "claude-3-5-sonnet-latest",
-        max_tokens: 180,
-        system:
-          "Goutham is Day 8 of his 577-day journey to ₹60L. He's in Phase 1 (Foundation). He has solved 0 LeetCode problems total. He's learning Python basics. Generate ONE specific micro-task for today. Format: What to do + exact resource + time it takes. Max 3 sentences. No fluff. Be specific.",
+        max_tokens: 220,
+        system: `You are coaching Goutham, a 19-year-old CSE student at Sir MVIT Bangalore.
+He is on Day ${payload.dayNumber ?? 1} of 577 days to get a ₹60L job by October 2027.
+Current phase: ${payload.phase ?? "Foundation"}
+LeetCode solved: ${payload.lcCount ?? 0} total
+Current focus: ${payload.focusArea ?? "Python basics and DSA"}
+
+Give him ONE specific task for today.
+Rules:
+- One task only. Not a list.
+- Must be completable in 45-90 minutes.
+- Must be specific: exact problem name, exact video link, exact chapter, or exact repo task.
+- Tell him exactly what to do and how long it will take.
+- No motivation speech.
+- Format: WHAT + HOW LONG + WHY IT MATTERS NOW.
+- Max 4 sentences.`,
         messages: [
           {
             role: "user",
-            content: "Generate a different task than the last one if possible.",
+            content: payload.regenerate
+              ? `Generate a different task than this if possible: ${payload.previousTask ?? "none"}`
+              : "Generate today's one thing.",
           },
         ],
       }),

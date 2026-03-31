@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono } from "next/font/google";
+import AppShell from "@/components/layout/AppShell";
 import ServiceWorkerRegistrar from "@/components/pwa/ServiceWorkerRegistrar";
 import "./globals.css";
 
@@ -51,7 +52,7 @@ export default function RootLayout({
     <html lang="en" className={jetbrainsMono.variable}>
       <body className={`${jetbrainsMono.className} bg-[#060606] text-[#e5e5e5] min-h-screen antialiased`}>
         <ServiceWorkerRegistrar />
-        {children}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

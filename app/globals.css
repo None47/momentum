@@ -180,3 +180,9 @@ textarea {
     animation: none;
   }
 }
+
+textarea:focus,
+input:focus,
+button:focus {
+  outline: none;
+}
