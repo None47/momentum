@@ -26,6 +26,10 @@ function write(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function filled(count: number, value: boolean): boolean[] {
+  return new Array(count).fill(value);
+}
+
 // ── Topic Status ──────────────────────────────────────────
 export function getTopicStatus(topicId: string): TopicStatus {
   const all = read<Record<string, TopicStatus>>(KEYS.topicStatus, {});
@@ -56,6 +60,21 @@ export function toggleSubtopic(topicId: string, index: number, count: number): b
   return all[topicId];
 }
 
+export function setSubtopicState(topicId: string, index: number, count: number, done: boolean): boolean[] {
+  const all = read<Record<string, boolean[]>>(KEYS.subtopicDone, {});
+  if (!all[topicId]) all[topicId] = filled(count, false);
+  all[topicId][index] = done;
+  write(KEYS.subtopicDone, all);
+  return all[topicId];
+}
+
+export function setAllSubtopicsDone(topicId: string, count: number, done: boolean): boolean[] {
+  const all = read<Record<string, boolean[]>>(KEYS.subtopicDone, {});
+  all[topicId] = filled(count, done);
+  write(KEYS.subtopicDone, all);
+  return all[topicId];
+}
+
 // ── LeetCode per-topic ────────────────────────────────────
 export function getLCDone(topicId: string, count: number): boolean[] {
   const all = read<Record<string, boolean[]>>(KEYS.lcDone, {});
@@ -70,6 +89,21 @@ export function toggleLC(topicId: string, index: number, count: number): boolean
   return all[topicId];
 }
 
+export function setLCState(topicId: string, index: number, count: number, done: boolean): boolean[] {
+  const all = read<Record<string, boolean[]>>(KEYS.lcDone, {});
+  if (!all[topicId]) all[topicId] = filled(count, false);
+  all[topicId][index] = done;
+  write(KEYS.lcDone, all);
+  return all[topicId];
+}
+
+export function setAllLCDone(topicId: string, count: number, done: boolean): boolean[] {
+  const all = read<Record<string, boolean[]>>(KEYS.lcDone, {});
+  all[topicId] = filled(count, done);
+  write(KEYS.lcDone, all);
+  return all[topicId];
+}
+
 // ── Notes ─────────────────────────────────────────────────
 export function getTopicNotes(topicId: string): string {
   const all = read<Record<string, string>>(KEYS.notes, {});
@@ -80,6 +114,12 @@ export function setTopicNotes(topicId: string, text: string): void {
   const all = read<Record<string, string>>(KEYS.notes, {});
   all[topicId] = text;
   write(KEYS.notes, all);
+}
+
+export function markTopicComplete(topicId: string, subtopicCount: number, lcCount: number): void {
+  setTopicStatus(topicId, "DONE");
+  setAllSubtopicsDone(topicId, subtopicCount, true);
+  setAllLCDone(topicId, lcCount, true);
 }
 
 // ── Global LC Counter ─────────────────────────────────────
