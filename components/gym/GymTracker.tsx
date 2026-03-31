@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   CartesianGrid,
   Line,
@@ -310,6 +310,10 @@ export default function GymTracker() {
               {todaySplit}
             </h2>
             <p className="mt-3 text-[10px] leading-relaxed text-[#737373]">{SPLIT_SCHEDULE}</p>
+            <div className="mt-4 space-y-1 text-[11px] text-[#cfcfcf]">
+              <p>This week: {sessionsThisWeek}/5 sessions</p>
+              <p>Gym streak: {overview.currentStreak} days</p>
+            </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <MetricCard label="This week" value={`${sessionsThisWeek}/5 sessions`} tone="blue" />
@@ -339,7 +343,7 @@ export default function GymTracker() {
 
             <button
               onClick={() => startWorkout(plannedSplit)}
-              className="mt-4 flex min-h-12 w-full items-center justify-center rounded-sm bg-[#e5e5e5] px-4 py-3 text-[12px] font-bold tracking-[0.18em] text-[#060606]"
+              className="mt-4 flex min-h-14 w-full items-center justify-center rounded-sm bg-[#e5e5e5] px-4 py-3 text-[12px] font-bold tracking-[0.18em] text-[#060606]"
             >
               START WORKOUT
             </button>
@@ -737,7 +741,7 @@ function ActiveWorkoutView({
                       {bestEver ? `${bestEver.weight}kg × ${bestEver.reps} reps` : "No PR yet"}
                     </span>
                   </p>
-                  {progress && (
+                  {progress && !progress.isNewPr && (
                     <p className={`mt-2 text-[10px] font-bold ${getProgressToneClass(progress.tone)}`}>
                       {progress.label}
                     </p>
@@ -746,7 +750,7 @@ function ActiveWorkoutView({
 
                 <div className="flex flex-col items-end gap-2">
                   {progress?.isNewPr && (
-                    <span className="rounded-sm border border-[#fbbf24]/40 bg-[#2a2008] px-2 py-1 text-[8px] font-bold tracking-[0.16em] text-[#fbbf24] shadow-[0_0_16px_rgba(251,191,36,0.35)]">
+                    <span className="rounded-sm border border-[#fbbf24]/40 bg-[#2a2008] px-2 py-1 text-[8px] font-bold tracking-[0.16em] text-[#fbbf24] shadow-[0_0_16px_rgba(251,191,36,0.35)] gold-glow">
                       NEW PR
                     </span>
                   )}
@@ -1079,7 +1083,7 @@ function ChartCard({
   children,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="rounded-sm border border-[#1a1a1a] bg-[#0d0d0d] p-4">
