@@ -342,6 +342,13 @@ export function getProfileMeta() {
   return readStorage<ProfileMeta>(KEYS.profileMeta, { projects: 0, cgpa: 0 });
 }
 
+export function saveProfileMeta(value: ProfileMeta) {
+  writeStorage(KEYS.profileMeta, value);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("momentum:data-changed"));
+  }
+}
+
 export function getReferralStatus() {
   const lc = getLeetCodeCount();
   const profile = getProfileMeta();

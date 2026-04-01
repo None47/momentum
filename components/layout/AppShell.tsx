@@ -25,6 +25,14 @@ import {
   getYesterdayKey,
   markAppOpened,
 } from "@/lib/momentum";
+import {
+  ACCOUNTABILITY_REASONS,
+  getSmartNotificationPayloads,
+  getTodayAccountabilityEntry,
+  markNotificationSent,
+  needsAccountabilityCheck,
+  saveAccountabilityEntry,
+} from "@/lib/career-store";
 
 type LockInMode = "focus" | "break";
 
@@ -75,11 +83,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [studySince, setStudySince] = useState<number | null>(null);
   const [studyCount, setStudyCount] = useState(1);
   const [studySound, setStudySound] = useState<AmbientMode>(() => getBodyDoublingState().sound);
+  const [accountabilityOpen, setAccountabilityOpen] = useState(false);
+  const [accountabilityReasonOpen, setAccountabilityReasonOpen] = useState(false);
+  const [accountabilityMessage, setAccountabilityMessage] = useState<string | null>(null);
+  const [accountabilityDraft, setAccountabilityDraft] = useState({
+    gym: null as boolean | null,
+    coding: null as boolean | null,
+    leetcode: null as boolean | null,
+    reason: "",
+  });
 
   const todayKey = getTodayKey();
   const hideChrome = pathname === "/why" || lockInOpen;
   const warningHabit = CORE_HABITS.find((habit) => habit.id === warningHabitId) ?? null;
   const referral = getReferralStatus();
+  const shouldShowAccountability = accountabilityOpen || (!getTodayAccountabilityEntry() && needsAccountabilityCheck(clock));
   const dailyTaskText =
     getDailyTask(todayKey)?.task ??
     "Open the library laptop and finish the one coding task that matters today.";
@@ -121,6 +139,42 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const permission = typeof Notification !== "undefined" ? Notification.permission : "denied";
+    if (permission !== "granted") return;
+
+    const payload = getSmartNotificationPayloads(clock)[0];
+    if (!payload) return;
+
+    const show = async () => {
+      try {
+        if ("serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.showNotification(payload.title, {
+            body: payload.body,
+            tag: payload.id,
+          });
+        } else {
+          new Notification(payload.title, { body: payload.body, tag: payload.id });
+        }
+        markNotificationSent(payload.id);
+      } catch {
+        // Best effort only.
+      }
+    };
+
+    void show();
+  }, [clock]);
+
+  useEffect(() => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "default") return;
+    const timer = window.setTimeout(() => {
+      Notification.requestPermission().catch(() => undefined);
+    }, 2500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -227,6 +281,39 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setStudySince(null);
   }
 
+  function submitAccountability() {
+    if (
+      accountabilityDraft.gym === null ||
+      accountabilityDraft.coding === null ||
+      accountabilityDraft.leetcode === null
+    ) {
+      return;
+    }
+
+    const hasMiss =
+      !accountabilityDraft.gym || !accountabilityDraft.coding || !accountabilityDraft.leetcode;
+
+    if (hasMiss && !accountabilityDraft.reason) {
+      setAccountabilityReasonOpen(true);
+      return;
+    }
+
+    saveAccountabilityEntry({
+      date: todayKey,
+      gym: accountabilityDraft.gym,
+      coding: accountabilityDraft.coding,
+      leetcode: accountabilityDraft.leetcode,
+      reason: accountabilityDraft.reason,
+      submittedAt: Date.now(),
+    });
+
+    setAccountabilityOpen(false);
+    setAccountabilityReasonOpen(false);
+    setAccountabilityMessage(hasMiss ? "Logged. Tomorrow." : "Good.");
+    setAccountabilityDraft({ gym: null, coding: null, leetcode: null, reason: "" });
+    window.setTimeout(() => setAccountabilityMessage(null), 1800);
+  }
+
   return (
     <>
       {!hideChrome && (
@@ -321,6 +408,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {accountabilityMessage && (
+        <div className="fixed inset-x-0 top-24 z-[93] flex justify-center px-4">
+          <div className="rounded-full border border-white/10 bg-[#090909] px-5 py-3 text-[13px] text-white">
+            {accountabilityMessage}
+          </div>
+        </div>
+      )}
+
       {skipConfirmOpen && warningHabit && (
         <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/88 px-5">
           <div className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#0b0b0b] p-6">
@@ -349,6 +444,92 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 NO, I&apos;LL DO IT
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {shouldShowAccountability && (
+        <div className="fixed inset-0 z-[97] flex items-center justify-center bg-black/88 px-5">
+          <div className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#0b0b0b] p-6">
+            <p className="text-[12px] tracking-[0.18em] text-white/45">DAILY ACCOUNTABILITY</p>
+            <p className="mt-4 text-[22px] leading-9 text-white">
+              Did you complete your 3 habits today?
+            </p>
+            <div className="mt-6 space-y-4">
+              {[
+                { key: "gym", label: "GYM" },
+                { key: "coding", label: "CODING" },
+                { key: "leetcode", label: "LEETCODE" },
+              ].map((item) => (
+                <div key={item.key} className="flex items-center justify-between">
+                  <p className="text-[14px] text-white">{item.label}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAccountabilityDraft((current) => ({
+                          ...current,
+                          [item.key]: true,
+                        }))
+                      }
+                      className={`rounded-[16px] border px-4 py-2 text-[11px] font-semibold tracking-[0.12em] ${
+                        accountabilityDraft[item.key as "gym" | "coding" | "leetcode"] === true
+                          ? "border-[#1f5d42] bg-[#0d2218] text-[#8fe0b7]"
+                          : "border-white/10 bg-white/6 text-white"
+                      }`}
+                    >
+                      YES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAccountabilityDraft((current) => ({
+                          ...current,
+                          [item.key]: false,
+                        }))
+                      }
+                      className={`rounded-[16px] border px-4 py-2 text-[11px] font-semibold tracking-[0.12em] ${
+                        accountabilityDraft[item.key as "gym" | "coding" | "leetcode"] === false
+                          ? "border-[#6b2020] bg-[#230d0d] text-[#ffb1b1]"
+                          : "border-white/10 bg-white/6 text-white"
+                      }`}
+                    >
+                      NO
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {accountabilityReasonOpen && (
+              <div className="mt-6">
+                <p className="text-[13px] tracking-[0.14em] text-[#fbbf24]">WHY NOT?</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ACCOUNTABILITY_REASONS.map((reason) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => setAccountabilityDraft((current) => ({ ...current, reason }))}
+                      className={`rounded-full border px-3 py-2 text-[11px] font-semibold tracking-[0.08em] ${
+                        accountabilityDraft.reason === reason
+                          ? "border-[#fbbf24]/35 bg-[#1f1605] text-[#fbbf24]"
+                          : "border-white/10 bg-white/6 text-white/72"
+                      }`}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={submitAccountability}
+              className="mt-6 w-full rounded-[20px] border border-white/12 bg-white px-4 py-3 text-[12px] font-semibold tracking-[0.14em] text-black"
+            >
+              SUBMIT
+            </button>
           </div>
         </div>
       )}

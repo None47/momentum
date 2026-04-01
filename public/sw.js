@@ -1,9 +1,10 @@
-const CACHE_NAME = "momentum-v2";
+const CACHE_NAME = "momentum-v3";
 const CORE_ROUTES = [
   "/",
   "/today",
   "/chain",
   "/roadmap",
+  "/hunt",
   "/gym",
   "/stats",
   "/report",

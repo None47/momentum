@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getCurrentPhase, getDayNumber } from "@/lib/constants";
 import { completeHabit, getLeetCodeCount } from "@/lib/store";
@@ -305,17 +306,25 @@ export default function TodayPage() {
               {allDone ? "Nothing else matters now." : "3 cards. Show up."}
             </p>
           </div>
-          <button
-            onClick={openLockIn}
-            disabled={!isLockInReady()}
-            className={`rounded-full border px-4 py-2 text-[12px] font-semibold tracking-[0.12em] ${
-              isLockInReady()
-                ? "border-white/15 bg-white text-black"
-                : "border-white/10 bg-transparent text-white/35"
-            }`}
-          >
-            ◉ LOCK IN
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/stats#progress-letter"
+              className="rounded-full border border-[#fbbf24]/20 bg-[#fbbf24]/12 px-4 py-2 text-[11px] font-semibold tracking-[0.12em] text-[#fbbf24]"
+            >
+              WHY AM I DOING THIS
+            </Link>
+            <button
+              onClick={openLockIn}
+              disabled={!isLockInReady()}
+              className={`rounded-full border px-4 py-2 text-[12px] font-semibold tracking-[0.12em] ${
+                isLockInReady()
+                  ? "border-white/15 bg-white text-black"
+                  : "border-white/10 bg-transparent text-white/35"
+              }`}
+            >
+              ◉ LOCK IN
+            </button>
+          </div>
         </div>
 
         {shouldPromptWeeklyPlan() && (

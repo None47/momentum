@@ -2,6 +2,19 @@
 
 import { useEffect, useState } from "react";
 import {
+  ensureProgressLetterEntries,
+  getHonestyStreak,
+  getIdentityStatement,
+  getIdentityStats,
+  getNotificationSettings,
+  getProgressLetter,
+  getResumeReadiness,
+  getWeeklyAccountabilitySummary,
+  saveIdentityStatement,
+  saveNotificationSettings,
+  saveProgressLetterBaseText,
+} from "@/lib/career-store";
+import {
   getEnergyInsight,
   getGithubCache,
   getGithubUsername,
@@ -24,6 +37,11 @@ export default function StatsPage() {
   const [githubUsername, setGithubUsername] = useState("");
   const [githubStats, setGithubStats] = useState<GithubCacheEntry | null>(null);
   const [githubLoading, setGithubLoading] = useState(false);
+  const [, setRefreshKey] = useState(0);
+  const [identityDraft, setIdentityDraft] = useState("");
+  const [letterDraft, setLetterDraft] = useState("");
+  const [quietStart, setQuietStart] = useState("23:00");
+  const [quietEnd, setQuietEnd] = useState("05:25");
   const summary = getStatsSummary();
   const referral = getReferralStatus();
   const lockInSessions = getWeeklyLockInSessions();
@@ -32,10 +50,34 @@ export default function StatsPage() {
   const mockStats = getMockInterviewStats();
   const patternReport = getPatternReport();
   const codingStreak = getCurrentHabitStreak("grind-coding");
+  const identity = getIdentityStats();
+  const accountability = getWeeklyAccountabilitySummary();
+  const honestyStreak = getHonestyStreak();
+  const progressLetter = getProgressLetter();
+  const resumeReadiness = getResumeReadiness();
 
   useEffect(() => {
+    ensureProgressLetterEntries();
     setGithubUsername(getGithubUsername());
     setGithubStats(getGithubCache());
+    setIdentityDraft(getIdentityStatement());
+    setLetterDraft(getProgressLetter().baseText);
+    const notificationSettings = getNotificationSettings();
+    setQuietStart(notificationSettings.quietStart);
+    setQuietEnd(notificationSettings.quietEnd);
+
+    const sync = () => {
+      setRefreshKey((value) => value + 1);
+      setGithubStats(getGithubCache());
+      setIdentityDraft(getIdentityStatement());
+      setLetterDraft(getProgressLetter().baseText);
+      const nextNotificationSettings = getNotificationSettings();
+      setQuietStart(nextNotificationSettings.quietStart);
+      setQuietEnd(nextNotificationSettings.quietEnd);
+    };
+
+    window.addEventListener("momentum:data-changed", sync);
+    return () => window.removeEventListener("momentum:data-changed", sync);
   }, []);
 
   async function fetchGithubStats() {
@@ -65,6 +107,42 @@ export default function StatsPage() {
       <p className="mt-3 text-[24px] font-semibold tracking-[0.04em] text-white">
         Numbers only. No spin.
       </p>
+
+      <section className="mt-6 rounded-[32px] border border-[#fbbf24]/12 bg-[linear-gradient(180deg,rgba(251,191,36,0.08),rgba(9,9,9,0.96))] p-5">
+        <p className="text-[11px] tracking-[0.18em] text-[#f6d98a]">YOU ARE BECOMING</p>
+        <div className="mt-5 space-y-5">
+          {[
+            { label: "A SOFTWARE ENGINEER", value: identity.softwareEngineerVotes, max: Math.max(100, identity.softwareEngineerVotes + 100), suffix: "votes cast" },
+            { label: "A DISCIPLINED PERSON", value: identity.disciplinedVotes, max: Math.max(100, identity.disciplinedVotes + 100), suffix: "votes cast" },
+            { label: "SOMEONE WHO SHOWS UP DAILY", value: identity.showUpStreak, max: 30, suffix: "day streak" },
+          ].map((item, index) => (
+            <div key={item.label}>
+              <p className="text-[15px] font-semibold text-white">
+                {index === 0 ? "◆" : index === 1 ? "◈" : "◉"} {item.label}
+              </p>
+              <div className="mt-3 h-2 rounded-full bg-black/40">
+                <div
+                  className="h-full rounded-full bg-[#fbbf24]"
+                  style={{ width: `${Math.min(100, (item.value / item.max) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[13px] text-[#f6d98a]">
+                {item.value} {item.suffix}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-6 text-[13px] tracking-[0.14em] text-white/45">IDENTITY STRENGTH</p>
+        <p className="mt-2 text-[28px] font-semibold text-white">{identity.score}/100</p>
+        <p className="mt-2 text-[14px] text-white/62">Every day you show up, this number climbs.</p>
+      </section>
+
+      {identity.isMotivationLow && (
+        <section className="mt-4 rounded-[30px] border border-[#fbbf24]/18 bg-[#120f07] p-5">
+          <p className="text-[11px] tracking-[0.18em] text-[#f6d98a]">IDENTITY STATEMENT</p>
+          <p className="mt-4 whitespace-pre-wrap text-[16px] leading-8 text-white">{identity.statement}</p>
+        </section>
+      )}
 
       <section className="mt-8 grid grid-cols-2 gap-3">
         <div className="rounded-[28px] border border-white/8 bg-[#090909] p-5">
@@ -210,6 +288,84 @@ export default function StatsPage() {
         <p className="mt-5 text-[15px] font-semibold text-white">
           {referral.unlocked ? "REFERRAL UNLOCKED — CONTACT COUSIN" : "REFERRAL: LOCKED"}
         </p>
+      </section>
+
+      <section className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+        <p className="text-[11px] tracking-[0.18em] text-white/45">ACCOUNTABILITY</p>
+        <p className="mt-3 text-[28px] font-semibold text-white">{honestyStreak} day honesty streak</p>
+        <p className="mt-2 text-[14px] text-white/62">This streak is about honesty, not perfection.</p>
+        <div className="mt-4 space-y-2 text-[14px] text-white/72">
+          <p>Gym: {accountability.gym}/7 days ({Math.round((accountability.gym / 7) * 100)}%)</p>
+          <p>Coding: {accountability.coding}/7 days ({Math.round((accountability.coding / 7) * 100)}%)</p>
+          <p>LeetCode: {accountability.leetcode}/7 days ({Math.round((accountability.leetcode / 7) * 100)}%)</p>
+          <p>
+            Your most honest miss:{" "}
+            {accountability.topReason ? `${accountability.topReason.label} (${accountability.topReason.count} times)` : "No pattern yet"}
+          </p>
+        </div>
+      </section>
+
+      <section className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+        <p className="text-[11px] tracking-[0.18em] text-white/45">RESUME READINESS</p>
+        <p className="mt-3 text-[32px] font-semibold text-white">{resumeReadiness.readiness}/100</p>
+        <p className="mt-2 text-[14px] text-[#fbbf24]">{resumeReadiness.band}</p>
+        <div className="mt-4 h-2 rounded-full bg-white/8">
+          <div className="h-full rounded-full bg-[#fbbf24]" style={{ width: `${resumeReadiness.readiness}%` }} />
+        </div>
+      </section>
+
+      <section id="progress-letter" className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+        <p className="text-[11px] tracking-[0.18em] text-white/45">PROGRESS LETTER</p>
+        <textarea
+          value={letterDraft}
+          onChange={(event) => setLetterDraft(event.target.value)}
+          onBlur={() => saveProgressLetterBaseText(letterDraft)}
+          rows={12}
+          className="mt-4 w-full rounded-[24px] border border-white/8 bg-black/20 px-4 py-4 text-[16px] leading-8 tracking-[0.04em] text-white"
+        />
+        <div className="mt-4 space-y-3">
+          {progressLetter.updates.map((update) => (
+            <div key={update.id} className="rounded-[22px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[12px] tracking-[0.16em] text-[#fbbf24]">{update.label}</p>
+              <p className="mt-3 text-[14px] leading-7 text-white/72">{update.text}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-[12px] text-white/45">Stored locally. Permanent. It only grows.</p>
+      </section>
+
+      <section className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+        <p className="text-[11px] tracking-[0.18em] text-white/45">SETTINGS</p>
+        <p className="mt-4 text-[13px] text-white/62">Identity statement</p>
+        <textarea
+          value={identityDraft}
+          onChange={(event) => setIdentityDraft(event.target.value)}
+          onBlur={() => saveIdentityStatement(identityDraft)}
+          rows={5}
+          className="mt-2 w-full rounded-[22px] border border-white/10 bg-black/20 px-4 py-3 text-[14px] leading-7 text-white"
+        />
+        <div className="mt-4 grid grid-cols-2 gap-3 text-[13px] text-white/72">
+          <label>
+            <span className="text-white/45">Quiet hours start</span>
+            <input
+              value={quietStart}
+              onChange={(event) => setQuietStart(event.target.value)}
+              onBlur={() => saveNotificationSettings({ ...getNotificationSettings(), quietStart, quietEnd })}
+              type="time"
+              className="mt-2 w-full rounded-[18px] border border-white/10 bg-black/20 px-3 py-3 text-white"
+            />
+          </label>
+          <label>
+            <span className="text-white/45">Quiet hours end</span>
+            <input
+              value={quietEnd}
+              onChange={(event) => setQuietEnd(event.target.value)}
+              onBlur={() => saveNotificationSettings({ ...getNotificationSettings(), quietStart, quietEnd })}
+              type="time"
+              className="mt-2 w-full rounded-[18px] border border-white/10 bg-black/20 px-3 py-3 text-white"
+            />
+          </label>
+        </div>
       </section>
     </main>
   );

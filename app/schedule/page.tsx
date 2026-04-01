@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
-  addDays,
   createScheduleBlockId,
   deleteScheduleBlock,
   ensureScheduleSeeded,
@@ -234,19 +233,20 @@ function getRepeatSummary(draft: DraftBlock) {
 export default function SchedulePage() {
   const todayKey = formatDateKey(new Date());
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
-  const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [blocks, setBlocks] = useState<ScheduleBlock[]>(() => {
+    ensureScheduleSeeded();
+    return getScheduleBlocks();
+  });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftBlock>(() => getDraftBlock(todayKey));
   const [error, setError] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    ensureScheduleSeeded();
-    setBlocks(getScheduleBlocks());
-  }, []);
-
-  const occurrences = useMemo(() => getScheduleOccurrences(selectedDateKey), [blocks, selectedDateKey]);
+  const occurrences = useMemo(() => {
+    void blocks;
+    return getScheduleOccurrences(selectedDateKey);
+  }, [blocks, selectedDateKey]);
   const positionedOccurrences = useMemo(() => layoutOccurrences(occurrences), [occurrences]);
   const gapEntries = useMemo(() => getGapEntries(occurrences), [occurrences]);
   const weekDates = useMemo(() => getWeekDates(selectedDateKey), [selectedDateKey]);
