@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import BottomNav from "@/components/layout/BottomNav";
 import { getDayNumber, TOTAL_DAYS } from "@/lib/constants";
+import {
+  getBodyDoublingState,
+  incrementBodyDoublingSession,
+  setBodyDoublingSound,
+  type AmbientMode,
+} from "@/lib/executive-store";
 import {
   CORE_HABITS,
   addLockInSession,
@@ -64,6 +71,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [warningHabitId, setWarningHabitId] = useState<string | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
+  const [studyModeOpen, setStudyModeOpen] = useState(false);
+  const [studySince, setStudySince] = useState<number | null>(null);
+  const [studyCount, setStudyCount] = useState(1);
+  const [studySound, setStudySound] = useState<AmbientMode>(() => getBodyDoublingState().sound);
 
   const todayKey = getTodayKey();
   const hideChrome = pathname === "/why" || lockInOpen;
@@ -111,6 +122,41 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!lockInOpen || !studyModeOpen) return;
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return;
+    }
+
+    const client = createClient(supabaseUrl, supabaseAnonKey);
+    const channel = client.channel("study-with-me", {
+      config: {
+        presence: {
+          key: crypto.randomUUID(),
+        },
+      },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        setStudyCount(Math.max(1, Object.keys(state).length));
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ online_at: new Date().toISOString() });
+        }
+      });
+
+    return () => {
+      channel.untrack();
+      client.removeChannel(channel);
+    };
+  }, [lockInOpen, studyModeOpen]);
 
   useEffect(() => {
     const evaluateWarning = () => {
@@ -177,6 +223,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     setEndSessionPromptOpen(false);
     setLockInOpen(false);
+    setStudyModeOpen(false);
+    setStudySince(null);
   }
 
   return (
@@ -313,6 +361,67 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <p className="text-[12px] tracking-[0.2em] text-white/45">TODAY&apos;S CODING TASK</p>
               <p className="mt-4 text-[22px] leading-9 text-white">{dailyTaskText}</p>
             </div>
+            {!studyModeOpen ? (
+              <div className="mt-8 rounded-[28px] border border-white/10 bg-white/4 p-5">
+                <p className="text-[12px] tracking-[0.18em] text-white/45">STUDY WITH ME</p>
+                <p className="mt-3 text-[15px] leading-7 text-white/72">
+                  Silent body doubling for the days when the hostel feels too isolating.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudyModeOpen(true);
+                    setStudySince(Date.now());
+                    incrementBodyDoublingSession();
+                  }}
+                  className="mt-4 rounded-full border border-white/12 bg-white px-4 py-3 text-[12px] font-semibold tracking-[0.12em] text-black"
+                >
+                  ◈ FIND A STUDY PARTNER
+                </button>
+              </div>
+            ) : (
+              <div className="mt-8 rounded-[28px] border border-white/10 bg-white/4 p-5">
+                <p className="text-[12px] tracking-[0.18em] text-white/45">STUDY SESSION ACTIVE</p>
+                <p className="mt-3 text-[15px] text-white">
+                  You: studying since {studySince ? formatTimer(Math.floor((clock.getTime() - studySince) / 1000)) : "00:00"}
+                </p>
+                <p className="mt-2 text-[15px] leading-7 text-white/72">
+                  {studyCount} people studying right now worldwide. They can&apos;t see you. You can&apos;t see them. You are not alone.
+                </p>
+                <div className="mt-4 rounded-[22px] border border-white/8 bg-black/20 p-4">
+                  <p className="text-[10px] tracking-[0.16em] text-white/40">YOUR TASK</p>
+                  <p className="mt-2 text-[14px] leading-7 text-white">{dailyTaskText}</p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(["OFF", "RAIN", "CAFE", "BROWN"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setStudySound(mode);
+                        setBodyDoublingSound(mode);
+                      }}
+                      className={`rounded-full border px-3 py-2 text-[11px] font-semibold ${studySound === mode ? "border-white/14 bg-white text-black" : "border-white/10 bg-black/20 text-white/55"}`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-4 text-[12px] text-white/45">
+                  You have studied alongside others {getBodyDoublingState().monthlySessions} times this month.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudyModeOpen(false);
+                    setStudySince(null);
+                  }}
+                  className="mt-4 rounded-full border border-white/12 bg-white/6 px-4 py-3 text-[12px] font-semibold tracking-[0.12em] text-white"
+                >
+                  END STUDY WITH ME
+                </button>
+              </div>
+            )}
             <div className="mt-16">
               <p className="text-[12px] tracking-[0.2em] text-white/45">
                 {lockInState.mode === "focus" ? "FOCUS" : "BREAK"}

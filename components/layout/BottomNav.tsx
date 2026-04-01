@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { getDueProblemReviews } from "@/lib/research-store";
 
 const tabs = [
   { href: "/today", label: "TODAY", icon: <span className="text-[14px]">□</span> },
@@ -64,6 +65,14 @@ function DumbbellIcon() {
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [reviewCount, setReviewCount] = useState(0);
+
+  useEffect(() => {
+    const sync = () => setReviewCount(getDueProblemReviews().length);
+    sync();
+    window.addEventListener("momentum:data-changed", sync);
+    return () => window.removeEventListener("momentum:data-changed", sync);
+  }, []);
 
   return (
     <nav
@@ -83,7 +92,20 @@ export default function BottomNav() {
                   : "text-white/30 hover:text-white/50"
               }`}
             >
-              <NavIcon>{tab.icon}</NavIcon>
+              <NavIcon>
+                <span className="relative">
+                  {tab.icon}
+                  {tab.href === "/roadmap" && reviewCount > 0 && (
+                    <span
+                      className={`absolute -right-3 -top-2 rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${
+                        reviewCount > 0 ? "border-[#ef4444]/30 bg-[#2a1010] text-[#ffb4b4]" : "border-white/10 bg-white/10 text-white"
+                      }`}
+                    >
+                      {reviewCount}
+                    </span>
+                  )}
+                </span>
+              </NavIcon>
               <span className="text-[9px] font-medium tracking-[0.08em]">
                 {tab.label}
               </span>

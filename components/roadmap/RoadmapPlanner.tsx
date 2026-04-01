@@ -2,7 +2,28 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { getLeetCodeCount, setLeetCodeCount } from "@/lib/store";
-import { getProfileMeta } from "@/lib/momentum";
+import { getProfileMeta, getTodayKey } from "@/lib/momentum";
+import {
+  getBehaviouralQuestions,
+  getCodingMockPrompt,
+  getMockInterviewStats,
+  getSystemDesignPrompt,
+  isSystemDesignUnlocked,
+  saveMockInterview,
+  type InterviewType,
+} from "@/lib/executive-store";
+import {
+  PATTERN_FLASHCARDS,
+  formatHumanDate,
+  getPatternCards,
+  getDuePatternCards,
+  getDueProblemReviews,
+  getPatternCardStats,
+  getReviewStats,
+  reviewPatternCard,
+  reviewProblem,
+  syncSolvedProblemReview,
+} from "@/lib/research-store";
 import {
   getAllTopicStatuses,
   getLCDone,
@@ -293,6 +314,33 @@ function CheckboxRow({
   );
 }
 
+function ReviewResponseButton({
+  label,
+  onClick,
+  tone,
+}: {
+  label: string;
+  onClick: () => void;
+  tone: "bright" | "soft" | "danger";
+}) {
+  const toneClass =
+    tone === "bright"
+      ? "border-white/14 bg-white text-black"
+      : tone === "soft"
+        ? "border-[#fbbf24]/25 bg-[#fbbf24]/10 text-[#fbbf24]"
+        : "border-[#ef4444]/25 bg-[#2a1010] text-[#ffb4b4]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-2 text-[11px] font-semibold tracking-[0.08em] ${toneClass}`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function RoadmapPlanner() {
   const [hydrated, setHydrated] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
@@ -304,6 +352,16 @@ export default function RoadmapPlanner() {
   const [lcMap, setLcMap] = useState<Record<string, boolean[]>>({});
   const [notesMap, setNotesMap] = useState<Record<string, string>>({});
   const [lcCounter, setLcCounterState] = useState<LCCounter>(EMPTY_COUNTER);
+  const [reviewVersion, setReviewVersion] = useState(0);
+  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+  const [mockType, setMockType] = useState<InterviewType>("CODING");
+  const [mockRunning, setMockRunning] = useState(false);
+  const [mockStartedAt, setMockStartedAt] = useState<number | null>(null);
+  const [mockPrompt, setMockPrompt] = useState(getCodingMockPrompt());
+  const [mockAnswer, setMockAnswer] = useState("");
+  const [mockFeedback, setMockFeedback] = useState("");
+  const [mockLoading, setMockLoading] = useState(false);
+  const [mockNow, setMockNow] = useState(Date.now());
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   useEffect(() => {
@@ -332,6 +390,11 @@ export default function RoadmapPlanner() {
     setLcCounterState(syncedCounter);
     setHydrated(true);
     setNow(new Date());
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setMockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const topicProgress = useMemo(() => {
@@ -400,6 +463,13 @@ export default function RoadmapPlanner() {
   const cgpaValue = profileMeta.cgpa > 0 ? profileMeta.cgpa : 6.5;
   const readinessStatus = getReadinessStatus(lcSolved, completedProjects, cgpaValue);
   const referralUnlocked = lcSolved >= 300 && completedProjects >= 5 && cgpaValue >= 7.5;
+  const problemReviewStats = getReviewStats();
+  const dueProblemReviews = getDueProblemReviews();
+  const duePatternCards = getDuePatternCards().slice(0, 5);
+  const patternCardStats = getPatternCardStats();
+  const reviewCardQueue = duePatternCards.length > 0 ? duePatternCards : getPatternCards().slice(0, 3);
+  const mockStats = getMockInterviewStats();
+  const mockRemainingSeconds = mockStartedAt ? Math.max(0, 2700 - Math.floor((mockNow - mockStartedAt) / 1000)) : 2700;
 
   function updateManualLc(diff: "easy" | "medium" | "hard", direction: "up" | "down") {
     const next = direction === "up" ? incrementLC(diff) : decrementLC(diff);
@@ -428,6 +498,17 @@ export default function RoadmapPlanner() {
     const nextLeetcode = setLCState(topic.id, index, current.problems.length, nextValue);
     setLcMap((value) => ({ ...value, [topic.id]: nextLeetcode }));
     updateDerivedStatus(topic, current.subtopics, nextLeetcode, current.notes);
+    const problem = current.problems[index];
+    syncSolvedProblemReview(
+      {
+        problemNumber: problem.id,
+        title: problem.title,
+        category: topic.title,
+        difficulty: problem.difficulty,
+      },
+      nextValue,
+    );
+    setReviewVersion((value) => value + 1);
   }
 
   function handleNotesChange(topic: RoadmapTopic, text: string) {
@@ -481,6 +562,66 @@ export default function RoadmapPlanner() {
       ...value,
       [topic.id]: new Array(current.problems.length).fill(true),
     }));
+  }
+
+  function formatMockTimer(totalSeconds: number) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function startMockInterview(type: InterviewType) {
+    setMockType(type);
+    setMockFeedback("");
+    setMockAnswer("");
+    setMockRunning(true);
+    setMockStartedAt(Date.now());
+    setMockPrompt(
+      type === "CODING"
+        ? getCodingMockPrompt()
+        : type === "BEHAVIOURAL"
+          ? getBehaviouralQuestions()[0]
+          : getSystemDesignPrompt(),
+    );
+  }
+
+  async function submitMockInterview() {
+    if (!mockStartedAt) return;
+    setMockLoading(true);
+    try {
+      const response = await fetch("/api/mock-interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: mockType,
+          prompt: mockPrompt,
+          answer: mockAnswer,
+        }),
+      });
+      const data = (await response.json()) as {
+        feedback?: string;
+        pass?: boolean;
+        score?: number;
+        weakness?: string;
+      };
+      saveMockInterview({
+        id: crypto.randomUUID(),
+        type: mockType,
+        prompt: mockPrompt,
+        startedAt: mockStartedAt,
+        submittedAt: Date.now(),
+        minutesTaken: Math.round((Date.now() - mockStartedAt) / 60000),
+        answer: mockAnswer,
+        feedback: data.feedback ?? "",
+        pass: Boolean(data.pass),
+        score: data.score ?? 0,
+        weakness: data.weakness ?? "Communication",
+      });
+      setMockFeedback(data.feedback ?? "");
+      setMockRunning(false);
+    } finally {
+      setMockLoading(false);
+    }
   }
 
   return (
@@ -576,6 +717,244 @@ export default function RoadmapPlanner() {
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        <section id="review" className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] tracking-[0.18em] text-white/45">REVIEW</p>
+              <p className="mt-2 text-[20px] font-semibold text-white">Spaced repetition for solved problems.</p>
+            </div>
+            <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${problemReviewStats.dueToday > 0 ? "border-[#ef4444]/30 bg-[#2a1010] text-[#ffb4b4]" : "border-white/10 bg-black/20 text-white/55"}`}>
+              {problemReviewStats.dueToday} DUE
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">MASTERED</p>
+              <p className="mt-2 text-[24px] font-semibold text-[#fbbf24]">
+                {problemReviewStats.totalMastered}/{problemReviewStats.totalSolved}
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">RETENTION RATE</p>
+              <p className="mt-2 text-[24px] font-semibold text-white">{problemReviewStats.retentionRate}%</p>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-[24px] border border-white/8 bg-black/20 p-4">
+            <p className="text-[10px] tracking-[0.16em] text-white/40">FORGETTING RISK</p>
+            <p className="mt-2 text-[14px] leading-6 text-white/72">
+              At your current rate, you will forget {problemReviewStats.projectedForgotten} problems by next month.
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {dueProblemReviews.length === 0 ? (
+              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4 text-[14px] text-white/55">
+                No reviews due. Keep solving and the queue will build automatically.
+              </div>
+            ) : (
+              dueProblemReviews.map((review) => (
+                <article
+                  key={`${review.id}-${reviewVersion}`}
+                  className={`rounded-[28px] border p-4 ${review.nextReviewDate < getTodayKey() ? "border-[#ef4444]/20 bg-[#140b0b]" : "border-white/8 bg-black/20"}`}
+                >
+                  <p className={`text-[10px] tracking-[0.16em] ${review.mastered ? "text-[#fbbf24]" : "text-white/40"}`}>
+                    {review.mastered ? "MASTERED" : `DUE ${formatHumanDate(review.nextReviewDate).toUpperCase()}`}
+                  </p>
+                  <p className="mt-3 text-[18px] font-semibold text-white">
+                    PROBLEM #{review.problemNumber} — {review.title}
+                  </p>
+                  <p className="mt-2 text-[13px] leading-6 text-white/65">
+                    Category: {review.category}
+                    <br />
+                    Difficulty: {review.difficulty}
+                    <br />
+                    Can you solve it in under {review.promptMinutes} minutes?
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ReviewResponseButton
+                      label="I REMEMBER"
+                      tone="bright"
+                      onClick={() => {
+                        reviewProblem(review.id, "remembered");
+                        setReviewVersion((value) => value + 1);
+                      }}
+                    />
+                    <ReviewResponseButton
+                      label="NEEDED A HINT"
+                      tone="soft"
+                      onClick={() => {
+                        reviewProblem(review.id, "hint");
+                        setReviewVersion((value) => value + 1);
+                      }}
+                    />
+                    <ReviewResponseButton
+                      label="FORGOT"
+                      tone="danger"
+                      onClick={() => {
+                        reviewProblem(review.id, "forgot");
+                        setReviewVersion((value) => value + 1);
+                      }}
+                    />
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section id="cards" className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] tracking-[0.18em] text-white/45">CARDS</p>
+              <p className="mt-2 text-[20px] font-semibold text-white">Pattern recall over pattern rereading.</p>
+            </div>
+            <div className="text-right text-[12px] text-white/55">
+              <p>{patternCardStats.mastered}/{patternCardStats.total} mastered</p>
+              <p className="mt-1 text-[#fbbf24]">{patternCardStats.dueToday} due today</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">WEAKEST PATTERN</p>
+              <p className="mt-2 text-[16px] font-semibold text-white">{patternCardStats.weakestPattern}</p>
+            </div>
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">DAILY LOAD</p>
+              <p className="mt-2 text-[16px] font-semibold text-white">{Math.max(3, Math.min(5, duePatternCards.length || 3))} cards</p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {reviewCardQueue.map((card) => {
+              const flipped = flippedCards[card.id] ?? false;
+              return (
+                <article key={card.id} className="rounded-[28px] border border-white/8 bg-black/20 p-4 [perspective:1200px]">
+                  <button
+                    type="button"
+                    onClick={() => setFlippedCards((current) => ({ ...current, [card.id]: !current[card.id] }))}
+                    className="block w-full"
+                  >
+                    <div className="relative min-h-[220px] w-full [transform-style:preserve-3d] transition duration-500" style={{ transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+                      <div className="absolute inset-0 rounded-[22px] border border-white/8 bg-[#0a0a0a] p-5 text-left [backface-visibility:hidden]">
+                        <p className="text-[10px] tracking-[0.16em] text-white/40">FRONT</p>
+                        <p className="mt-4 text-[22px] font-semibold text-white">{card.title}</p>
+                        <p className="mt-4 text-[15px] leading-7 text-white/75">{card.front}</p>
+                        <p className="mt-6 text-[12px] text-white/35">Tap to flip</p>
+                      </div>
+                      <div className="absolute inset-0 rounded-[22px] border border-[#fbbf24]/15 bg-[#130f04] p-5 text-left [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
+                        <p className="text-[10px] tracking-[0.16em] text-[#fbbf24]">BACK</p>
+                        <pre className="mt-4 whitespace-pre-wrap text-[12px] leading-6 text-white/80">{card.back}</pre>
+                        <p className="mt-4 text-[12px] leading-6 text-white/60">
+                          Key problems: {card.examples.join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ReviewResponseButton
+                      label="I KNOW THIS"
+                      tone="bright"
+                      onClick={() => {
+                        reviewPatternCard(card.id, "remembered");
+                        setReviewVersion((value) => value + 1);
+                      }}
+                    />
+                    <ReviewResponseButton
+                      label="REVIEW AGAIN"
+                      tone="danger"
+                      onClick={() => {
+                        reviewPatternCard(card.id, "forgot");
+                        setReviewVersion((value) => value + 1);
+                      }}
+                    />
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-[24px] border border-white/8 bg-black/20 p-4">
+            <p className="text-[10px] tracking-[0.16em] text-white/40">ALL 12 CARDS</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {PATTERN_FLASHCARDS.map((card) => (
+                <span key={card.id} className="rounded-full border border-white/10 px-3 py-1 text-[11px] text-white/55">
+                  {card.title}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="mock-interview" className="mt-4 rounded-[30px] border border-white/8 bg-[#090909] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] tracking-[0.18em] text-white/45">MOCK INTERVIEW</p>
+              <p className="mt-2 text-[20px] font-semibold text-white">Practice under pressure, not just in theory.</p>
+            </div>
+            <div className="text-right text-[12px] text-white/55">
+              <p>{mockStats.total} mocks done</p>
+              <p className="mt-1 text-[#fbbf24]">Readiness {mockStats.readiness}/100</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">CODING PASS RATE</p>
+              <p className="mt-2 text-[22px] font-semibold text-white">{mockStats.passRate}%</p>
+              <p className="mt-1 text-[12px] text-white/45">Avg easy solve time: {mockStats.avgEasyTime} min</p>
+            </div>
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">NEXT WEAKNESS</p>
+              <p className="mt-2 text-[16px] font-semibold text-white">{mockStats.weakest}</p>
+              <p className="mt-1 text-[12px] text-white/45">Behavioural avg: {mockStats.behaviouralAvg}/10</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => startMockInterview("CODING")} className="rounded-full border border-white/12 bg-white px-4 py-2 text-[11px] font-semibold text-black">START CODING MOCK</button>
+            <button type="button" onClick={() => startMockInterview("BEHAVIOURAL")} className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-[11px] font-semibold text-white">START BEHAVIOURAL</button>
+            <button type="button" onClick={() => startMockInterview("SYSTEM_DESIGN")} disabled={!isSystemDesignUnlocked()} className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-[11px] font-semibold text-white disabled:text-white/25">SYSTEM DESIGN</button>
+          </div>
+
+          <div className="mt-5 rounded-[28px] border border-white/8 bg-black/20 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] tracking-[0.16em] text-white/40">{mockType.replace("_", " ")}</p>
+                <p className="mt-2 text-[16px] leading-7 text-white">{mockPrompt}</p>
+              </div>
+              {mockRunning && (
+                <p className="text-[28px] font-semibold tracking-[0.08em] text-[#ef4444]">
+                  {formatMockTimer(mockRemainingSeconds)}
+                </p>
+              )}
+            </div>
+            <textarea
+              value={mockAnswer}
+              onChange={(event) => setMockAnswer(event.target.value)}
+              rows={10}
+              placeholder="Type your approach, structure, or answer here."
+              className="mt-4 w-full rounded-[22px] border border-white/10 bg-[#060606] px-4 py-3 text-[14px] leading-6 text-white placeholder:text-white/25"
+            />
+            <div className="mt-4 flex gap-2">
+              <button type="button" onClick={submitMockInterview} disabled={mockLoading || mockAnswer.trim().length === 0} className="rounded-full border border-white/12 bg-white px-4 py-2 text-[11px] font-semibold text-black disabled:opacity-40">
+                {mockLoading ? "EVALUATING" : "SUBMIT"}
+              </button>
+              {!isSystemDesignUnlocked() && (
+                <p className="text-[12px] text-white/35">System design unlocks in Phase 3.</p>
+              )}
+            </div>
+            {mockFeedback && (
+              <div className="mt-4 rounded-[22px] border border-[#fbbf24]/15 bg-[#120f06] p-4">
+                <pre className="whitespace-pre-wrap text-[13px] leading-6 text-white/80">{mockFeedback}</pre>
+              </div>
+            )}
           </div>
         </section>
 
