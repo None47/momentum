@@ -2,35 +2,22 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
 import { getDayNumber, TOTAL_DAYS } from "@/lib/constants";
 import {
   CORE_HABITS,
-  activateComebackMode,
   addLockInSession,
-  getComebackHabit,
-  getConsecutiveMisses,
   getCoreCompletions,
   getCurrentHabitStreak,
   getDailyTask,
-  getIdentityMirrorState,
   getLockInSessions,
   getReferralStatus,
   getTodayKey,
   getWeeklyLockInSessions,
   getYesterdayKey,
-  hasActiveDoubleXp,
   markAppOpened,
-  markWhyPromptSeen,
-  shouldPromptWhy,
 } from "@/lib/momentum";
-
-type MirrorState = {
-  title: string;
-  body: string;
-  background: string;
-};
 
 type LockInMode = "focus" | "break";
 
@@ -68,11 +55,7 @@ function formatClock(now: Date) {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [mirror, setMirror] = useState<MirrorState | null>(null);
-  const [comebackOpen, setComebackOpen] = useState(false);
-  const [comebackToastOpen, setComebackToastOpen] = useState(false);
   const [perfectMomentOpen, setPerfectMomentOpen] = useState(false);
   const [lockInOpen, setLockInOpen] = useState(false);
   const [lockInState, setLockInState] = useState<LockInState>(getDefaultLockInState);
@@ -117,48 +100,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [todayKey]);
 
   useEffect(() => {
-    if (shouldPromptWhy() && pathname !== "/why") {
-      markWhyPromptSeen();
-      router.push("/why?prompt=missed");
-      return;
-    }
-
-    const comebackHabit = getComebackHabit();
-    if (comebackHabit) {
-      const timer = window.setTimeout(() => {
-        setComebackOpen(true);
-        markAppOpened();
-      }, 0);
-      return () => window.clearTimeout(timer);
-    }
-
-    const identity = getIdentityMirrorState();
-    const nextMirror: MirrorState = identity.isFirstOpenToday
-      ? {
-          title: `DAY ${getDayNumber()} OF ${TOTAL_DAYS}.`,
-          body: `${identity.daysUntilTarget} days until ₹60L.`,
-          background: "#060606",
-        }
-      : identity.showedUpYesterday
-        ? {
-            title: "YOU SHOWED UP YESTERDAY.",
-            body: `Day ${identity.yesterdayShowUpStreak} streak. Do it again.`,
-            background: "#07120b",
-          }
-        : {
-            title: "YOU DIDN'T SHOW UP YESTERDAY.",
-            body: `That's ${Math.max(...CORE_HABITS.map((habit) => getConsecutiveMisses(habit.id)))} days in a row missed. Today is the only day that matters.`,
-            background: "#140707",
-          };
-
     const timer = window.setTimeout(() => {
-      setMirror(nextMirror);
       markAppOpened();
-      window.setTimeout(() => setMirror(null), 2000);
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [pathname, router]);
+  }, [pathname]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
@@ -213,15 +160,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     return () => window.clearInterval(timer);
   }, [lockInOpen, lockInState.running, todayKey]);
-
-  function handleComebackStart() {
-    activateComebackMode();
-    setComebackOpen(false);
-    setComebackToastOpen(true);
-    setRefreshKey((value) => value + 1);
-    window.setTimeout(() => setComebackToastOpen(false), 2200);
-    router.push("/today");
-  }
 
   function finishLockIn(worked: boolean) {
     if (worked) {
@@ -323,18 +261,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      {mirror && !comebackOpen && (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center px-8 text-center"
-          style={{ backgroundColor: mirror.background }}
-        >
-          <div>
-            <p className="text-[34px] font-semibold tracking-[0.12em] text-white">{mirror.title}</p>
-            <p className="mt-4 text-[16px] text-white/72">{mirror.body}</p>
-          </div>
-        </div>
-      )}
-
       {perfectMomentOpen && (
         <div className="fixed inset-0 z-[91] flex items-center justify-center bg-black px-8 text-center">
           <div>
@@ -343,27 +269,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <p className="mt-1 text-[16px] text-white/65">
               {Math.max(TOTAL_DAYS - getDayNumber(), 0)} days remaining.
             </p>
-          </div>
-        </div>
-      )}
-
-      {comebackOpen && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black px-6 text-center">
-          <div className="max-w-sm">
-            <p className="text-[34px] font-semibold tracking-[0.08em] text-white">YOU&apos;RE BACK.</p>
-            <p className="mt-5 text-[17px] text-white/72">
-              You missed {Math.max(...CORE_HABITS.map((habit) => getConsecutiveMisses(habit.id)))} days.
-            </p>
-            <p className="mt-4 text-[15px] text-white/60">Every long journey has setbacks.</p>
-            <p className="mt-2 text-[15px] text-white/60">
-              The only question is what happens next.
-            </p>
-            <button
-              onClick={handleComebackStart}
-              className="mt-10 w-full rounded-3xl border border-white/12 bg-white px-5 py-4 text-[13px] font-semibold tracking-[0.12em] text-black"
-            >
-              START AGAIN — DAY 1 OF NEW STREAK
-            </button>
           </div>
         </div>
       )}
@@ -468,14 +373,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {comebackToastOpen && (
-        <div className="fixed inset-x-4 top-24 z-[97] mx-auto max-w-lg rounded-3xl border border-white/12 bg-[#0d0d0d] px-5 py-4 text-[14px] text-white">
-          New streak started. Don&apos;t break it this time.
-          {hasActiveDoubleXp() && (
-            <span className="mt-1 block text-white/55">DOUBLE XP active for 48 hours.</span>
-          )}
-        </div>
-      )}
     </>
   );
 }

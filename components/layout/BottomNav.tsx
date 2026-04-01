@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 const tabs = [
   { href: "/today", label: "TODAY", icon: <span className="text-[14px]">□</span> },
+  { href: "/schedule", label: "SCHEDULE", icon: <CalendarIcon /> },
   { href: "/chain", label: "CHAIN", icon: <ChainIcon /> },
   { href: "/roadmap", label: "ROADMAP", icon: <RoadmapIcon /> },
   { href: "/gym", label: "GYM", icon: <DumbbellIcon /> },
@@ -20,6 +21,17 @@ function ChainIcon() {
       <circle cx="27" cy="6" r="2.5" />
       <path d="M7.5 6h6" />
       <path d="M18.5 6h6" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 3v3" />
+      <path d="M17 3v3" />
+      <rect x="4" y="5" width="16" height="15" rx="2.5" />
+      <path d="M4 9h16" />
     </svg>
   );
 }
@@ -58,7 +70,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1a1a1a] bg-[#060606]/95 backdrop-blur-sm"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="mx-auto grid max-w-lg grid-cols-5 items-center py-2">
+      <div className="mx-auto grid max-w-lg grid-cols-6 items-center py-2">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
           return (
