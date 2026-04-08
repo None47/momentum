@@ -45,7 +45,6 @@ type ToastState = {
   label: string | null;
 };
 
-type AccountabilityKey = "gymDone" | "codingDone" | "lcDone";
 type MainHabitKey = "body-gym" | "grind-coding" | "grind-leetcode";
 
 const MAIN_HABIT_IDS: MainHabitKey[] = ["body-gym", "grind-coding", "grind-leetcode"];
@@ -145,28 +144,32 @@ function getDailyQuestion() {
 }
 
 export default function TodayPage() {
-  const [completedToday, setCompletedToday] = useState<string[]>([]);
+  const today = getTodayDate();
+  const defaultOneThing =
+    getOneThing(today) ??
+    getFocusTask(today) ??
+    ONE_THING_LIBRARY[(getDayNumber() - 1) % ONE_THING_LIBRARY.length];
+
+  const [completedToday, setCompletedToday] = useState<string[]>(() => getCompletionsForDate(today));
   const [medicationsExpanded, setMedicationsExpanded] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
-  const [briefText, setBriefText] = useState<string | null>(null);
-  const [oneThing, setOneThing] = useState<string | null>(null);
-  const [energyScores, setEnergyScores] = useState(getEnergyScores());
-  const [moodScore, setMood] = useState<number | null>(getMoodScore());
-  const [accountability, setAccountability] = useState(getAccountability());
+  const [briefText, setBriefText] = useState<string | null>(() => getAIBrief(today) ?? buildMorningBrief());
+  const [oneThing, setOneThing] = useState<string | null>(defaultOneThing);
+  const [energyScores, setEnergyScores] = useState(() => getEnergyScores(today));
+  const [moodScore, setMood] = useState<number | null>(() => getMoodScore(today));
+  const [accountability, setAccountability] = useState(() => getAccountability(today));
   const [questionRevealed, setQuestionRevealed] = useState(false);
-  const [questionRating, setQuestionRating] = useState<string | null>(getCsQuestionRating());
+  const [questionRating, setQuestionRating] = useState<string | null>(() => getCsQuestionRating(today));
   const [showStarter, setShowStarter] = useState(false);
-  const [starterStep, setStarterStep] = useState(STARTER_STEPS[Math.min(getStarterAttempts(), STARTER_STEPS.length - 1)]);
+  const [starterStep, setStarterStep] = useState(STARTER_STEPS[Math.min(getStarterAttempts(today), STARTER_STEPS.length - 1)]);
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [toast, setToast] = useState<ToastState>({ visible: false, xp: 0, color: "#ffffff", label: null });
   const [burstActive, setBurstActive] = useState(false);
   const [burstCategory, setBurstCategory] = useState<HabitCategory>("GRIND");
   const [perfectDayVisible, setPerfectDayVisible] = useState(false);
-  const [libraryCheckIn, setLibraryCheckIn] = useState(getLibraryCheckIn());
+  const [libraryCheckIn, setLibraryCheckIn] = useState(() => getLibraryCheckIn(today));
   const [oneThingDone, setOneThingDone] = useState(false);
-  const prevPerfectStateRef = useRef(false);
-
-  const today = getTodayDate();
+  const perfectDayTimeoutRef = useRef<number | null>(null);
   const phase = getCurrentPhase();
   const phaseProgress = getPhaseProgress();
   const sleep = getSleepCognition();
@@ -212,27 +215,32 @@ export default function TodayPage() {
   }, []);
 
   useEffect(() => {
-    if (!briefText) {
-      const generated = buildMorningBrief();
-      saveAIBrief(generated, today);
-      setBriefText(generated);
+    if (getAIBrief(today) !== briefText && briefText) {
+      saveAIBrief(briefText, today);
     }
-
-    if (!oneThing) {
-      const fallback = ONE_THING_LIBRARY[(getDayNumber() - 1) % ONE_THING_LIBRARY.length];
-      saveOneThing(fallback, today);
-      setOneThing(fallback);
+    if (getOneThing(today) !== oneThing && oneThing) {
+      saveOneThing(oneThing, today);
     }
   }, [briefText, oneThing, today]);
 
   useEffect(() => {
-    const isPerfect = mainCompleteCount === mainHabits.length && mainHabits.length > 0;
-    if (isPerfect && !prevPerfectStateRef.current) {
-      setPerfectDayVisible(true);
-      window.setTimeout(() => setPerfectDayVisible(false), 2000);
+    return () => {
+      if (perfectDayTimeoutRef.current) {
+        window.clearTimeout(perfectDayTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function showPerfectDayOverlay() {
+    setPerfectDayVisible(true);
+    if (perfectDayTimeoutRef.current) {
+      window.clearTimeout(perfectDayTimeoutRef.current);
     }
-    prevPerfectStateRef.current = isPerfect;
-  }, [mainCompleteCount, mainHabits.length]);
+    perfectDayTimeoutRef.current = window.setTimeout(() => {
+      setPerfectDayVisible(false);
+      perfectDayTimeoutRef.current = null;
+    }, 2000);
+  }
 
   function triggerRewardToast(habit: HardcodedHabit) {
     const reward = rollReward(habit.xp_value);
@@ -255,7 +263,14 @@ export default function TodayPage() {
     completeHabit(habit.id, today);
     updateStreak(habit.id, today);
     triggerRewardToast(habit);
-    setCompletedToday(getCompletionsForDate(today));
+    const nextCompleted = getCompletionsForDate(today);
+    setCompletedToday(nextCompleted);
+    const isPerfectNow =
+      mainHabits.length > 0 &&
+      mainHabits.every((mainHabit) => nextCompleted.includes(mainHabit.id));
+    if (isPerfectNow) {
+      showPerfectDayOverlay();
+    }
     if (habit.id === "mind-journal") setMood((current) => current ?? 3);
   }
 
@@ -320,7 +335,7 @@ export default function TodayPage() {
       <section className="mt-4 grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
         <div className="space-y-4">
           <Card toneClass={sleep.tone}>
-            <Label>TODAY'S COGNITION</Label>
+            <Label>TODAY&apos;S COGNITION</Label>
             <p className={`mt-2 text-[15px] font-semibold ${sleep.tone}`}>{sleep.label}</p>
             <p className="mt-2 text-[12px] leading-6 text-white/55">{sleep.note}</p>
           </Card>
@@ -436,7 +451,7 @@ export default function TodayPage() {
                     setLibraryCheckIn(getLibraryCheckIn(today));
                   }}
                 >
-                  YES, I'M HERE
+                  YES, I&apos;M HERE
                 </ActionButton>
                 <ActionButton
                   active={libraryCheckIn?.present === false}
@@ -452,7 +467,7 @@ export default function TodayPage() {
           )}
 
           <Card>
-            <Label>TODAY'S CS QUESTION</Label>
+            <Label>TODAY&apos;S CS QUESTION</Label>
             <p className="mt-2 text-[12px] text-white/45">{dailyQuestion.category}</p>
             <p className="mt-3 text-[16px] font-semibold text-white">{dailyQuestion.question}</p>
             {!questionRevealed ? (
@@ -489,7 +504,7 @@ export default function TodayPage() {
                       setQuestionRating("didnt");
                     }}
                   >
-                    ✗ DIDN'T
+                    ✗ DIDN&apos;T
                   </ActionButton>
                 </div>
               </>
@@ -497,7 +512,7 @@ export default function TodayPage() {
           </Card>
 
           <Card>
-            <Label>TODAY'S ONE THING</Label>
+            <Label>TODAY&apos;S ONE THING</Label>
             <p className="mt-3 text-[15px] leading-7 text-white">{oneThing}</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <ActionButton active={oneThingDone} onClick={() => setOneThingDone(true)}>
@@ -512,17 +527,17 @@ export default function TodayPage() {
           <Card className="border-white/12">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <Label>CAN'T START?</Label>
+                <Label>CAN&apos;T START?</Label>
                 <p className="mt-2 text-[15px] text-white">Break the first action until starting is impossible to avoid.</p>
               </div>
-              <ActionButton onClick={() => setShowStarter((current) => !current)}>{showStarter ? "CLOSE" : "CAN'T START?"}</ActionButton>
+              <ActionButton onClick={() => setShowStarter((current) => !current)}>{showStarter ? "CLOSE" : "CAN&apos;T START?"}</ActionButton>
             </div>
             {showStarter && (
               <div className="mt-4 rounded-[10px] border border-white/7 bg-black/20 p-4">
                 <p className="text-[14px] leading-6 text-white">{starterStep}</p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <ActionButton onClick={() => setShowStarter(false)}>I DID IT</ActionButton>
-                  <ActionButton onClick={handleStarterShrink}>STILL CAN'T</ActionButton>
+                  <ActionButton onClick={handleStarterShrink}>STILL CAN&apos;T</ActionButton>
                 </div>
               </div>
             )}
@@ -543,8 +558,8 @@ export default function TodayPage() {
                       {getStreak(habit.id).current}-day streak. You have {24 - new Date().getHours()} hours.
                     </p>
                     <div className="mt-4 flex gap-3">
-                      <ActionButton onClick={() => handleComplete(habit)}>I'LL DO IT</ActionButton>
-                      <ActionButton>I'M SKIPPING TODAY</ActionButton>
+                      <ActionButton onClick={() => handleComplete(habit)}>I&apos;LL DO IT</ActionButton>
+                      <ActionButton>I&apos;M SKIPPING TODAY</ActionButton>
                     </div>
                   </div>
                 ))}
