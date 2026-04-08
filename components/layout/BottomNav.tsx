@@ -63,19 +63,19 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1a1a1a] bg-[#060606]/95 backdrop-blur-sm"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/7 bg-[#060606]/96 backdrop-blur-sm"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="mx-auto grid max-w-lg grid-cols-5 items-center py-2">
+      <div className="mx-auto grid max-w-5xl grid-cols-5 items-center px-2 py-2">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-1 py-1 transition-colors duration-200 ${
+              className={`flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-[10px] px-1 py-1 transition-colors duration-200 ${
                 isActive
-                  ? "text-[#e5e5e5]"
+                  ? "bg-white/4 text-[#e5e5e5]"
                   : "text-white/30 hover:text-white/50"
               }`}
             >

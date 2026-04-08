@@ -1,36 +1,42 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { getDayNumber, TOTAL_DAYS } from "@/lib/constants";
+import { getScore } from "@/lib/store";
 
-interface HeaderProps {
-  score: number;
-}
-
-export default function Header({ score }: HeaderProps) {
+export default function Header() {
+  const [score, setScore] = useState(0);
   const dayNumber = getDayNumber();
   const isHighScore = score >= 500;
 
+  useEffect(() => {
+    const sync = () => setScore(getScore());
+    sync();
+    window.addEventListener("momentum:data-changed", sync);
+    return () => window.removeEventListener("momentum:data-changed", sync);
+  }, []);
+
   return (
     <header
-      className="sticky top-0 z-50 border-b border-[#1a1a1a] bg-[#060606]/95 backdrop-blur-sm"
+      className="sticky top-0 z-50 border-b border-white/7 bg-[#060606]/96 backdrop-blur-sm"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-[10px] tracking-[0.2em] text-[#737373] uppercase day-flash">
-            Day {dayNumber} / {TOTAL_DAYS}
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <span className="day-flash text-[11px] font-medium tracking-[0.2em] text-white/55 uppercase">
+            DAY {dayNumber} / {TOTAL_DAYS}
           </span>
         </div>
-        <div className="flex flex-col items-center">
-          <span className="text-xs tracking-[0.4em] font-bold text-[#e5e5e5]">
+        <div className="shrink-0 text-center">
+          <span className="text-[12px] font-bold tracking-[0.36em] text-[#e5e5e5]">
             MOMENTUM
           </span>
         </div>
-        <div className="flex flex-col items-end">
-          <span className={`text-sm font-bold tabular-nums ${isHighScore ? "gold-glow" : "text-[#fbbf24]"}`}>
+        <div className="min-w-0 flex-1 text-right">
+          <span className={`text-[14px] font-bold tabular-nums ${isHighScore ? "gold-glow" : "text-[#fbbf24]"}`}>
             {score.toLocaleString()}
           </span>
-          <span className="text-[9px] text-[#92710d] tracking-wider">₹60L</span>
+          <span className="ml-2 text-[11px] tracking-[0.18em] text-[#fbbf24]">₹60L</span>
         </div>
       </div>
     </header>

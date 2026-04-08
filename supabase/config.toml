@@ -1,0 +1,40 @@
+project_id = "momentum"
+
+[functions.generate-morning-brief]
+verify_jwt = true
+
+[functions.expand-journal-entry]
+verify_jwt = true
+
+[functions.weekly-oracle]
+verify_jwt = true
+
+[functions.streak-at-risk-alert]
+verify_jwt = true
+
+[functions.generate-daily-task]
+verify_jwt = true
+
+[functions.generate-weekly-plan]
+verify_jwt = true
+
+[functions.evaluate-think-aloud]
+verify_jwt = true
+
+[functions.generate-oa-feedback]
+verify_jwt = true
+
+[functions.generate-resume-bullet]
+verify_jwt = true
+
+[functions.generate-outreach-message]
+verify_jwt = true
+
+[functions.score-linkedin-profile]
+verify_jwt = true
+
+[functions.generate-cold-email]
+verify_jwt = true
+
+[functions.generate-star-story-feedback]
+verify_jwt = true

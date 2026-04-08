@@ -30,6 +30,7 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new Event("momentum:data-changed"));
 }
 
 export function getFocusTask(date = getTodayDate()): string | null {

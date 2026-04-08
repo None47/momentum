@@ -36,6 +36,7 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new Event("momentum:data-changed"));
 }
 
 // ── Habits ────────────────────────────────────────────────────

@@ -1,22 +1,25 @@
 // ============================================================
-// MOMENTUM — Constants
-// Day 1 = March 23, 2026. Target = October 31, 2027.
+// MOMENTUM — Shared Client Constants
+// Canonical mission timeline lives in lib/mission/*
 // ============================================================
 
-export const DAY_ONE = new Date("2026-03-23T00:00:00+05:30");
-export const TARGET_DATE = new Date("2027-10-31T00:00:00+05:30");
-export const TOTAL_DAYS = 577;
+import {
+  MISSION_DAY_ONE,
+  MISSION_TOTAL_DAYS as TOTAL_DAYS,
+  PLACEMENT_TARGET_DATE,
+} from "./mission/constants";
+import { getDaysRemaining, getMissionDayNumber, getMissionPhase } from "./mission/time";
+
+export const DAY_ONE = new Date(`${MISSION_DAY_ONE}T00:00:00+05:30`);
+export const TARGET_DATE = new Date(`${PLACEMENT_TARGET_DATE}T00:00:00+05:30`);
+export { TOTAL_DAYS };
 
 export function getDayNumber(): number {
-  const now = new Date();
-  const diff = now.getTime() - DAY_ONE.getTime();
-  return Math.max(1, Math.floor(diff / 86400000) + 1);
+  return getMissionDayNumber();
 }
 
 export function getDaysToPlacement(): number {
-  const now = new Date();
-  const diff = TARGET_DATE.getTime() - now.getTime();
-  return Math.max(0, Math.floor(diff / 86400000));
+  return getDaysRemaining();
 }
 
 export function getTimeGreeting(name: string = "Sachi"): string {
@@ -29,7 +32,14 @@ export function getTimeGreeting(name: string = "Sachi"): string {
 }
 
 export function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(new Date());
 }
 
 export function getFormattedDate(): string {
@@ -52,50 +62,42 @@ export const PHASES: Phase[] = [
   {
     number: 1,
     label: "FOUNDATION",
-    startDate: "2026-03-23",
-    endDate: "2026-06-30",
+    startDate: MISSION_DAY_ONE,
+    endDate: "2026-06-29",
     goals: ["First internship", "100 LeetCode", "3 projects", "All meds consistent"],
   },
   {
     number: 2,
-    label: "ACCELERATION",
-    startDate: "2026-07-01",
-    endDate: "2026-10-31",
+    label: "SKILL BUILD",
+    startDate: "2026-06-30",
+    endDate: "2026-12-30",
     goals: ["Use cousin referrals", "300 LeetCode", "CGPA 7.0+", "Clear backlogs"],
   },
   {
     number: 3,
-    label: "DOMINATION",
-    startDate: "2026-11-01",
+    label: "PEAK PREP",
+    startDate: "2026-12-31",
     endDate: "2027-05-31",
     goals: ["400+ LeetCode", "CGPA 7.5+", "600 LC", "Real projects shipping"],
   },
   {
     number: 4,
-    label: "PLACEMENT",
+    label: "APPLICATION BLITZ",
     startDate: "2027-06-01",
-    endDate: "2027-10-31",
+    endDate: PLACEMENT_TARGET_DATE,
     goals: ["750+ LeetCode total", "₹60L offer", "Finish strong"],
   },
 ];
 
 export function getCurrentPhase(): Phase {
-  const today = new Date().toISOString().split("T")[0];
-  for (const phase of PHASES) {
-    if (today >= phase.startDate && today <= phase.endDate) {
-      return phase;
-    }
-  }
-  return PHASES[0];
+  const missionPhase = getMissionPhase();
+  return PHASES.find((phase) => phase.number === missionPhase.phase) ?? PHASES[0];
 }
 
 export function getPhaseProgress(): { daysIn: number; daysTotal: number; pct: number } {
-  const phase = getCurrentPhase();
-  const start = new Date(phase.startDate).getTime();
-  const end = new Date(phase.endDate).getTime();
-  const now = new Date().getTime();
-  const daysIn = Math.max(0, Math.floor((now - start) / 86400000));
-  const daysTotal = Math.floor((end - start) / 86400000);
+  const phase = getMissionPhase();
+  const daysIn = Math.max(0, getDayNumber() - phase.startDay);
+  const daysTotal = phase.endDay - phase.startDay + 1;
   const pct = Math.min(100, Math.round((daysIn / daysTotal) * 100));
   return { daysIn, daysTotal, pct };
 }
