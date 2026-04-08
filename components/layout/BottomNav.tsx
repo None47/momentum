@@ -7,19 +7,18 @@ import { getDueProblemReviews } from "@/lib/research-store";
 
 const tabs = [
   { href: "/today", label: "TODAY", icon: <span className="text-[14px]">□</span> },
-  { href: "/schedule", label: "SCHEDULE", icon: <CalendarIcon /> },
+  { href: "/schedule", label: "TRACKER", icon: <TrackerIcon /> },
   { href: "/gym", label: "GYM", icon: <DumbbellIcon /> },
   { href: "/roadmap", label: "ROADMAP", icon: <RoadmapIcon /> },
   { href: "/stats", label: "STATS", icon: <span className="text-[13px]">▲</span> },
 ];
 
-function CalendarIcon() {
+function TrackerIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M7 3v3" />
-      <path d="M17 3v3" />
-      <rect x="4" y="5" width="16" height="15" rx="2.5" />
-      <path d="M4 9h16" />
+      <path d="M4 18h16" />
+      <path d="M7 15l3-3 3 2 4-6" />
+      <path d="M17 8h2v2" />
     </svg>
   );
 }

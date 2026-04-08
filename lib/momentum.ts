@@ -221,6 +221,53 @@ export function getShowedUpDays() {
   return total;
 }
 
+export function getCurrentShowUpStreak(fromDate = getTodayKey()) {
+  let streak = 0;
+  let cursor = fromDate;
+
+  while (cursor >= formatDateKey(DAY_ONE) && areAllCoreHabitsDone(cursor)) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+
+  return streak;
+}
+
+export function getLongestShowUpStreak() {
+  let longest = 0;
+  let current = 0;
+  let cursor = formatDateKey(DAY_ONE);
+  const today = getTodayKey();
+
+  while (cursor <= today) {
+    if (areAllCoreHabitsDone(cursor)) {
+      current += 1;
+      longest = Math.max(longest, current);
+    } else {
+      current = 0;
+    }
+    cursor = addDays(cursor, 1);
+  }
+
+  return longest;
+}
+
+export function getCoreHabitConsistencyWindow(days = 14, fromDate = getTodayKey()) {
+  return Array.from({ length: days }, (_, index) => {
+    const date = addDays(fromDate, -(days - 1 - index));
+    const completed = getCoreCompletions(date);
+    const doneCount = completed.filter((habit) => habit.completed).length;
+
+    return {
+      date,
+      completed,
+      doneCount,
+      ratio: doneCount / CORE_HABIT_IDS.length,
+      allDone: doneCount === CORE_HABIT_IDS.length,
+    };
+  });
+}
+
 export function getDaysSinceStart() {
   const today = parseDateKey(getTodayKey()).getTime();
   const start = parseDateKey(formatDateKey(DAY_ONE)).getTime();
