@@ -2,6 +2,7 @@ interface MockInterviewRequest {
   type?: "CODING" | "BEHAVIOURAL" | "SYSTEM_DESIGN";
   prompt?: string;
   answer?: string;
+  apiKey?: string;
 }
 
 function fallback(type: MockInterviewRequest["type"]) {
@@ -25,7 +26,6 @@ function fallback(type: MockInterviewRequest["type"]) {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   let payload: MockInterviewRequest = {};
 
   try {
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
   } catch {
     payload = {};
   }
+
+  const apiKey = payload.apiKey?.trim() || process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     return Response.json(fallback(payload.type));

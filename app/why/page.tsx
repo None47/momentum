@@ -1,11 +1,5 @@
-import WhyEditor from "@/components/why/WhyEditor";
+import { redirect } from "next/navigation";
 
-export default async function WhyPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ prompt?: string }>;
-}) {
-  const params = await searchParams;
-
-  return <WhyEditor prompt={params.prompt} />;
+export default function WhyPage() {
+  redirect("/today");
 }

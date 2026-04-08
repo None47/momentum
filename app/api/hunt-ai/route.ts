@@ -3,13 +3,17 @@ type HuntAction =
   | "project-bullet"
   | "project-rating"
   | "resume-score"
-  | "letter-update";
+  | "letter-update"
+  | "linkedin-headline"
+  | "linkedin-about"
+  | "internship-email";
 
 interface HuntAiPayload {
   action?: HuntAction;
   name?: string;
   company?: string;
   role?: string;
+  apiKey?: string;
   linkedinUrl?: string;
   stats?: string;
   progress?: string;
@@ -58,6 +62,30 @@ Action: Add 2 AWS services and quantify project outcomes.`,
       return {
         text: `${payload.dayLabel ?? "Day update"}: You have now solved ${payload.lcCount ?? 0} problems and completed ${payload.sessions ?? 0} sessions. Your streak is ${payload.streak ?? 0} days. Keep going.`,
       };
+    case "linkedin-headline":
+      return {
+        text: `Option 1: SDE Aspirant | Building AI-powered apps with Next.js + Claude API
+Option 2: CS Student | Full-Stack Developer | LeetCode ${payload.lcCount ?? 0} | MOMENTUM App Creator
+Option 3: Future SDE @ Amazon/Microsoft | Python · Next.js · Supabase | Open to internships`,
+      };
+    case "linkedin-about":
+      return {
+        text: `I am a CS student at Sir MVIT Bangalore building toward SDE roles at top tech companies by 2027. Right now I am focused on disciplined execution: solving LeetCode consistently, strengthening Python and full-stack foundations, and shipping projects that show real engineering proof. My current flagship project is MOMENTUM, a personal operating system built with Next.js, Supabase, and Claude API integrations. I care about clean product thinking, visible progress, and becoming the kind of engineer who can deliver reliably under pressure. I am actively looking for internship and software engineering opportunities where I can contribute from week one, learn quickly, and grow through strong technical feedback.`,
+      };
+    case "internship-email":
+      return {
+        text: `Subject: ${payload.role ?? "Developer Intern"} — Sir MVIT Student, MOMENTUM App Creator
+
+Hi ${payload.name ?? "[Name]"},
+
+I'm Goutham, a 2nd year CS student at Sir MVIT Bangalore. I built MOMENTUM, a full-stack habit tracking app using Next.js, Supabase, and the Claude API.
+
+I'm looking for a Python/backend internship for 2-3 months starting June 2026. I've been solving LeetCode daily and would contribute meaningfully from week 1.
+
+Would you be open to a 15-min call?
+
+Goutham M S`,
+      };
     default:
       return { text: "" };
   }
@@ -102,6 +130,35 @@ Rules:
 - Be concrete and concise.`;
   }
 
+  if (action === "linkedin-headline") {
+    return `Write 3 LinkedIn headline options.
+Rules:
+- Plain text only.
+- Label them Option 1, Option 2, Option 3.
+- Make them recruiter-friendly, concise, and specific.
+- Mention stack or proof, not hype.`;
+  }
+
+  if (action === "linkedin-about") {
+    return `Write a LinkedIn About section.
+Rules:
+- 120 to 170 words.
+- First person.
+- Professional and grounded.
+- Mention target roles, current project, stack, and learning focus.
+- No emojis.`;
+  }
+
+  if (action === "internship-email") {
+    return `Write a personalized cold email for an internship.
+Rules:
+- Plain text only.
+- Include a subject line.
+- 4 short paragraphs max.
+- Specific, respectful, and direct.
+- No emojis or fluff.`;
+  }
+
   return `Write one paragraph to append to a long-term progress letter.
 Rules:
 - 2 to 4 sentences.
@@ -135,13 +192,26 @@ Facts: ${(payload.facts ?? []).join("; ") || "None"}`;
 LeetCode solved: ${payload.lcCount ?? 0}
 Coding sessions: ${payload.sessions ?? 0}
 Streak: ${payload.streak ?? 0}`;
+    case "linkedin-headline":
+      return `Projects: ${payload.progress ?? "MOMENTUM"}
+Stats: ${payload.stats ?? "No stats"}
+LeetCode solved: ${payload.lcCount ?? 0}`;
+    case "linkedin-about":
+      return `Role target: ${payload.role ?? "SDE internships and entry-level SDE roles"}
+Current project: ${payload.progress ?? "MOMENTUM"}
+Stack and proof: ${payload.stats ?? "Next.js, Supabase, Claude API"}`;
+    case "internship-email":
+      return `Company: ${payload.company ?? "Unknown"}
+Role: ${payload.role ?? "Intern"}
+Recipient: ${payload.name ?? "Hiring Manager"}
+Proof: ${payload.progress ?? "Built MOMENTUM"}
+Stats: ${payload.stats ?? "Sir MVIT student, internship-ready"}`;
     default:
       return "";
   }
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   let payload: HuntAiPayload = {};
 
   try {
@@ -153,6 +223,8 @@ export async function POST(request: Request) {
   if (!payload.action) {
     return Response.json({ text: "" }, { status: 400 });
   }
+
+  const apiKey = payload.apiKey?.trim() || process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     return Response.json(fallbackResponse(payload));

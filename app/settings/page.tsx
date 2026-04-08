@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function StatsPage() {
+export default function SettingsPage() {
   redirect("/today");
 }

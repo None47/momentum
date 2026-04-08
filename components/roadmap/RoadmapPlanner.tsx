@@ -13,6 +13,15 @@ import {
   type InterviewType,
 } from "@/lib/executive-store";
 import {
+  createOaSimulation,
+  evaluateOaResult,
+  getOaSimulations,
+  saveOaSimulation,
+  type OaCompany,
+  type OaPhase,
+} from "@/lib/final-store";
+import { getStoredAnthropicKey, isAiEnabledLocally } from "@/lib/settings-store";
+import {
   PATTERN_FLASHCARDS,
   formatHumanDate,
   getPatternCards,
@@ -362,6 +371,11 @@ export default function RoadmapPlanner() {
   const [mockFeedback, setMockFeedback] = useState("");
   const [mockLoading, setMockLoading] = useState(false);
   const [mockNow, setMockNow] = useState(Date.now());
+  const [oaCompany, setOaCompany] = useState<OaCompany>("Amazon");
+  const [oaPhase, setOaPhase] = useState<OaPhase>("PHASE_1");
+  const [oaSession, setOaSession] = useState<ReturnType<typeof createOaSimulation> | null>(null);
+  const [oaCurrentIndex, setOaCurrentIndex] = useState(0);
+  const [oaHistoryVersion, setOaHistoryVersion] = useState(0);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   useEffect(() => {
@@ -470,6 +484,8 @@ export default function RoadmapPlanner() {
   const reviewCardQueue = duePatternCards.length > 0 ? duePatternCards : getPatternCards().slice(0, 3);
   const mockStats = getMockInterviewStats();
   const mockRemainingSeconds = mockStartedAt ? Math.max(0, 2700 - Math.floor((mockNow - mockStartedAt) / 1000)) : 2700;
+  const oaRemainingSeconds = oaSession ? Math.max(0, 5400 - Math.floor((mockNow - oaSession.startedAt) / 1000)) : 5400;
+  const oaHistory = getOaSimulations();
 
   function updateManualLc(diff: "easy" | "medium" | "hard", direction: "up" | "down") {
     const next = direction === "up" ? incrementLC(diff) : decrementLC(diff);
@@ -596,6 +612,7 @@ export default function RoadmapPlanner() {
           type: mockType,
           prompt: mockPrompt,
           answer: mockAnswer,
+          apiKey: navigator.onLine && isAiEnabledLocally() ? getStoredAnthropicKey() : "",
         }),
       });
       const data = (await response.json()) as {
@@ -622,6 +639,38 @@ export default function RoadmapPlanner() {
     } finally {
       setMockLoading(false);
     }
+  }
+
+  function startOa() {
+    setOaSession(createOaSimulation(oaCompany, oaPhase));
+    setOaCurrentIndex(0);
+  }
+
+  function updateOaAnswer(value: string) {
+    if (!oaSession) return;
+    const nextAnswers = [...oaSession.answers];
+    nextAnswers[oaCurrentIndex] = value;
+    setOaSession({ ...oaSession, answers: nextAnswers });
+  }
+
+  function submitOaStep() {
+    if (!oaSession) return;
+    if (oaCurrentIndex < oaSession.problems.length - 1) {
+      setOaCurrentIndex((value) => value + 1);
+      return;
+    }
+    const result = evaluateOaResult(oaSession.answers);
+    saveOaSimulation({
+      ...oaSession,
+      submittedAt: Date.now(),
+      minutesUsed: Math.round((Date.now() - oaSession.startedAt) / 60000),
+      pass: result.pass,
+      resultLabel: result.resultLabel,
+      feedback: result.feedback,
+    });
+    setOaSession(null);
+    setOaCurrentIndex(0);
+    setOaHistoryVersion((value) => value + 1);
   }
 
   return (
@@ -957,6 +1006,139 @@ export default function RoadmapPlanner() {
             )}
           </div>
         </section>
+
+        <section className="mt-4 rounded-[30px] border border-[#3b82f6]/18 bg-[linear-gradient(180deg,rgba(59,130,246,0.08),rgba(9,9,9,0.96))] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] tracking-[0.18em] text-[#93c5fd]">OA SIMULATOR</p>
+              <p className="mt-2 text-[20px] font-semibold text-white">Practice timed pressure, not just clean-room solving.</p>
+            </div>
+            <div className="text-right text-[12px] text-white/55">
+              <p>{oaHistory.length} OAs done</p>
+              <p className="mt-1 text-[#93c5fd]">90 min format</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] tracking-[0.16em] text-white/40">COMPANY</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(["Amazon", "Microsoft", "Flipkart", "Generic"] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setOaCompany(item)}
+                    className={`rounded-full border px-3 py-2 text-[11px] font-semibold ${oaCompany === item ? "border-white/12 bg-white text-black" : "border-white/10 bg-black/20 text-white"}`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] tracking-[0.16em] text-white/40">DIFFICULTY PHASE</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {([
+                  { key: "PHASE_1", label: "Phase 1: Easy only" },
+                  { key: "PHASE_2", label: "Phase 2: Easy + Medium" },
+                  { key: "PHASE_3", label: "Phase 3: Medium + Hard" },
+                ] as const).map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setOaPhase(item.key)}
+                    className={`rounded-full border px-3 py-2 text-[11px] font-semibold ${oaPhase === item.key ? "border-white/12 bg-white text-black" : "border-white/10 bg-black/20 text-white"}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={startOa}
+            className="mt-5 w-full rounded-[20px] border border-white/12 bg-white px-4 py-3 text-[12px] font-semibold text-black"
+          >
+            START OA SIMULATION
+          </button>
+
+          <div className="mt-5 space-y-2">
+            {oaHistory.slice(0, 5).map((entry) => (
+              <div key={`${entry.id}-${oaHistoryVersion}`} className="rounded-[20px] border border-white/8 bg-black/20 px-4 py-3 text-[13px] text-white/72">
+                <p className="text-white">{entry.date} | {entry.company} | {entry.resultLabel}</p>
+                <p className="mt-1">{entry.problems.length} problems | {entry.minutesUsed}/90 min</p>
+              </div>
+            ))}
+          </div>
+          {oaHistory[0] && (
+            <div className="mt-5 rounded-[22px] border border-white/8 bg-black/20 p-4">
+              <p className="text-[10px] tracking-[0.16em] text-white/40">LATEST OA RESULT</p>
+              <p className="mt-2 text-[18px] font-semibold text-white">OA COMPLETE — {oaHistory[0].minutesUsed} minutes used</p>
+              <div className="mt-3 space-y-2 text-[13px] text-white/72">
+                {oaHistory[0].feedback.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+                <p>Estimated result: {oaHistory[0].resultLabel}</p>
+                <p>Efficiency: {90 - oaHistory[0].minutesUsed >= 20 ? "Good — had buffer" : "Tight — reduce hesitation"}</p>
+                <p>Next OA practice: Recommended in 3 days.</p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {oaSession && (
+          <div className="fixed inset-0 z-[98] overflow-y-auto bg-[#050505] px-4 py-6">
+            <div className="mx-auto max-w-lg">
+              <div className="rounded-[28px] border border-[#3b82f6]/20 bg-[#090909] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] tracking-[0.18em] text-[#93c5fd]">ONLINE ASSESSMENT SIMULATION</p>
+                    <p className="mt-2 text-[13px] text-white/55">{oaCompany} · {oaPhase.replace("_", " ")}</p>
+                  </div>
+                  <p className="text-[28px] font-semibold tracking-[0.08em] text-[#ef4444]">{formatMockTimer(oaRemainingSeconds)}</p>
+                </div>
+
+                <div className="mt-5 rounded-[22px] border border-white/8 bg-black/20 p-4">
+                  <p className="text-[10px] tracking-[0.16em] text-white/40">PROBLEM {oaCurrentIndex + 1} OF {oaSession.problems.length}</p>
+                  <p className="mt-3 text-[18px] font-semibold text-white">{oaSession.problems[oaCurrentIndex].title}</p>
+                  <p className="mt-3 text-[14px] leading-7 text-white/80">{oaSession.problems[oaCurrentIndex].statement}</p>
+                  <p className="mt-4 text-[12px] text-white/55">Input: {oaSession.problems[oaCurrentIndex].sampleInput}</p>
+                  <p className="mt-1 text-[12px] text-white/55">Output: {oaSession.problems[oaCurrentIndex].sampleOutput}</p>
+                  <div className="mt-3 space-y-1 text-[12px] text-white/45">
+                    {oaSession.problems[oaCurrentIndex].constraints.map((constraint) => (
+                      <p key={constraint}>- {constraint}</p>
+                    ))}
+                  </div>
+                  <textarea
+                    value={oaSession.answers[oaCurrentIndex]}
+                    onChange={(event) => updateOaAnswer(event.target.value)}
+                    rows={10}
+                    placeholder="Your approach (write here)"
+                    className="mt-4 w-full rounded-[20px] border border-white/10 bg-[#060606] px-4 py-3 text-[14px] leading-6 text-white"
+                  />
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={submitOaStep}
+                      className="rounded-[18px] border border-white/12 bg-white px-4 py-3 text-[12px] font-semibold text-black"
+                    >
+                      {oaCurrentIndex === oaSession.problems.length - 1 ? "SUBMIT OA" : `SUBMIT PROBLEM ${oaCurrentIndex + 1} → NEXT`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOaSession(null)}
+                      className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-[12px] font-semibold text-white"
+                    >
+                      EXIT
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section className="mt-6 space-y-6">
           {([1, 2, 3, 4] as const).map((phase) => {
